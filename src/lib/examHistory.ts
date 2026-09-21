@@ -154,3 +154,58 @@ export function clearHistory(): void {
   localStorage.removeItem(HISTORY_KEY);
   localStorage.removeItem(STATS_KEY);
 }
+
+/**
+ * Returns the current study streak in calendar days.
+ * A streak counts consecutive days (today included) on which at least one
+ * exam or practice attempt was recorded.
+ */
+export function getStudyStreak(): number {
+  const history = loadHistory();
+  if (history.length === 0) return 0;
+
+  // Collect unique calendar dates (YYYY-MM-DD) of all attempts
+  const daySet = new Set<string>();
+  history.forEach(a => {
+    daySet.add(new Date(a.endTime).toISOString().slice(0, 10));
+  });
+
+  // Walk backwards from today, counting consecutive days that have activity
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    if (daySet.has(key)) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/**
+ * Returns an array of { date: 'YYYY-MM-DD', count: number } for the past
+ * `weeks` weeks (most recent last), suitable for a GitHub-style heatmap.
+ */
+export function getActivityHeatmap(weeks = 12): { date: string; count: number }[] {
+  const history = loadHistory();
+  const dayMap: Record<string, number> = {};
+  history.forEach(a => {
+    const key = new Date(a.endTime).toISOString().slice(0, 10);
+    dayMap[key] = (dayMap[key] || 0) + 1;
+  });
+
+  const cells: { date: string; count: number }[] = [];
+  const today = new Date();
+  const totalDays = weeks * 7;
+  for (let i = totalDays - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    cells.push({ date: key, count: dayMap[key] || 0 });
+  }
+  return cells;
+}

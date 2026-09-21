@@ -105,8 +105,21 @@ export function calculateScore(
     d.percentage = d.total > 0 ? Math.round((d.correct / d.total) * 100) : 0;
   });
 
-  // Scaled score: (raw/total) × 900, rounded to nearest 10
-  const scaledScore = Math.round(((rawCorrect / rawTotal) * 900) / 10) * 10;
+  // Compensatory domain-weighted scaled score (mirrors CompTIA SY0-701 methodology).
+  // Each domain contributes proportionally to its exam weight; within each domain
+  // the per-domain accuracy is multiplied by that weight.  The weighted sum (0–1)
+  // is then mapped onto the 100–900 scale and rounded to the nearest 10.
+  const domainWeightedSum = (Object.keys(DOMAIN_LABELS) as import('@/data/questions').Domain[]).reduce((acc, d) => {
+    const label = DOMAIN_LABELS[d];
+    const ds = domainScores[label];
+    if (!ds || ds.total === 0) return acc;
+    const domainAccuracy = ds.correct / ds.total;
+    return acc + domainAccuracy * DOMAIN_WEIGHTS[d];
+  }, 0);
+
+  // Fallback to simple ratio if no domain data is available
+  const weightedRatio = rawTotal > 0 ? domainWeightedSum : 0;
+  const scaledScore = Math.min(900, Math.max(100, Math.round((100 + weightedRatio * 800) / 10) * 10));
   const timeUsedMinutes = Math.round((Date.now() - startTime) / 60000);
 
   return {

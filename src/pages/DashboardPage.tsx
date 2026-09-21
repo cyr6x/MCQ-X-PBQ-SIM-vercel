@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Target, BookOpen, Layers, History, RotateCcw, ChevronRight, TrendingUp, TrendingDown, Minus, Zap, AlertTriangle } from 'lucide-react';
-import { loadHistory, loadQuestionStats } from '@/lib/examHistory';
+import { Shield, Target, BookOpen, Layers, History, ChevronRight, TrendingUp, TrendingDown, Minus, Zap, AlertTriangle, Flame } from 'lucide-react';
+import { loadHistory, loadQuestionStats, getStudyStreak, getActivityHeatmap } from '@/lib/examHistory';
 import { calculateReadiness } from '@/lib/readiness';
 import { fetchAttempts, subscribeAttempts, subscribeStats } from '@/lib/cloudSync';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
@@ -55,6 +55,9 @@ export default function DashboardPage() {
     });
   }, [stats]);
 
+  const streak = useMemo(() => getStudyStreak(), [tick]);
+  const heatmap = useMemo(() => getActivityHeatmap(12), [tick]);
+
   const trendIcon = readiness?.trend === 'improving'
     ? <TrendingUp className="h-4 w-4 text-success" />
     : readiness?.trend === 'declining'
@@ -80,7 +83,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <KPI
           label="Readiness"
           value={readiness ? `${readiness.overall}` : '—'}

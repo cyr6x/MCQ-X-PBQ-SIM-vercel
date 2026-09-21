@@ -51,6 +51,40 @@ export default function AnalyticsPage() {
     });
   }, [stats]);
 
+  // Domain-weighted gap: how much each domain hurts your scaled score.
+  // gap = examWeight% × (100 − accuracy%). Higher = more score left on the table.
+  const gapData = useMemo(() => {
+    const map: Record<string, { correct: number; total: number }> = {};
+    Object.values(stats).forEach((s) => {
+      if (!map[s.domain]) map[s.domain] = { correct: 0, total: 0 };
+      map[s.domain].correct += s.timesCorrect;
+      map[s.domain].total += s.timesAttempted;
+    });
+    return (Object.keys(DOMAIN_LABELS) as Domain[])
+      .map((d) => {
+        const m = map[DOMAIN_LABELS[d]] || map[d] || { correct: 0, total: 0 };
+        const acc = m.total > 0 ? Math.round((m.correct / m.total) * 100) : null;
+        const weightPct = Math.round(DOMAIN_WEIGHTS[d] * 100);
+        const gap = acc !== null ? +(DOMAIN_WEIGHTS[d] * (100 - acc)).toFixed(1) : null;
+        return {
+          key: d,
+          label: DOMAIN_LABELS[d],
+          shortLabel: DOMAIN_LABELS[d].replace(/^[\d.]+\s*/, ''),
+          acc,
+          weightPct,
+          gap,
+          attempts: m.total,
+        };
+      })
+      .sort((a, b) => {
+        // unattempted domains sink to the bottom; among attempted sort by gap desc
+        if (a.gap === null && b.gap === null) return 0;
+        if (a.gap === null) return 1;
+        if (b.gap === null) return -1;
+        return b.gap - a.gap;
+      });
+  }, [stats]);
+
   const totalAnswered = Object.values(stats).reduce((s, q) => s + q.timesAttempted, 0);
   const correctAnswered = Object.values(stats).reduce((s, q) => s + q.timesCorrect, 0);
   const accuracy = totalAnswered > 0 ? Math.round((correctAnswered / totalAnswered) * 100) : 0;

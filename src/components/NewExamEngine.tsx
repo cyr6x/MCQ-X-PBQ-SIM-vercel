@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, GripVertical, AlertTriangle, Clock, Timer, Pause, Play, Shuffle, LogOut } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
@@ -64,7 +64,60 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const qId = cur.kind === 'pbq' ? cur.data.id : cur.data.id;
   // (PBQs are interleaved throughout `questions` — no section concept.)
 
-  // Timer logic with Pause
+  // ── Keyboard shortcuts: A/B/C/D to select MCQ answers, ← → to navigate ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when focus is inside an input/select/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (submitted || isPaused) return;
+
+      if (cur.kind === 'mcq') {
+        const keyMap: Record<string, number> = { a: 0, b: 1, c: 2, d: 3 };
+        const optIdx = keyMap[e.key.toLowerCase()];
+        if (optIdx !== undefined && optIdx < cur.data.options.length) {
+          const q = cur.data;
+          if (q.type === 'single') {
+            setMcqAnswers(p => ({ ...p, [q.id]: optIdx }));
+          } else {
+            setMcqAnswers(p => {
+              const prev = (p[q.id] as number[] | undefined) || [];
+              const next = prev.includes(optIdx) ? prev.filter(x => x !== optIdx) : [...prev, optIdx];
+              return { ...p, [q.id]: next };
+            });
+          }
+          return;
+        }
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        goTo(idx + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goTo(Math.max(0, idx - 1));
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFlag();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // goTo and toggleFlag are redefined each render but that's fine here
+  }, [cur, idx, submitted, isPaused, mcqAnswers]);
+
+  // Soft pace warning in study mode: fires if more than 1 question/min behind ideal pace
+  const [showPaceWarning, setShowPaceWarning] = useState(false);
+  useEffect(() => {
+    if (!isStudyMode) return;
+    const totalMinutes = durationMinutes || 90;
+    const elapsed = (Date.now() - startTime) / 60000;
+    const idealQ = (idx / questions.length) * totalMinutes;
+    if (elapsed > 0 && elapsed > idealQ + 1) {
+      setShowPaceWarning(true);
+      const t = setTimeout(() => setShowPaceWarning(false), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [idx]);
   useEffect(() => {
     if (isStudyMode || submitted || isPaused) return;
 
@@ -242,7 +295,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   };
 
   if (submitted && scoreResult && !isStudyMode) {
-    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
+    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
   }
 
   const timerMins = Math.floor(remaining / 60);
@@ -253,7 +306,22 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans selection:bg-primary/20">
       
-      {/* Pause Overlay */}
+      {/* Sticky progress bar — always visible at very top */}
+      <div className="fixed top-0 left-0 right-0 z-[200] h-1 bg-muted">
+        <div
+          className="h-full bg-primary transition-all duration-500"
+          style={{ width: `${(answeredCount / questions.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Pace warning (study mode only) */}
+      {showPaceWarning && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[90] px-5 py-2.5 rounded-xl shadow-xl border border-warning bg-warning/10 text-warning font-bold text-xs flex items-center gap-2 animate-in slide-in-from-top-4">
+          <Timer className="h-4 w-4" />
+          Pace tip: try ~90 sec per question to finish on time
+          <button onClick={() => setShowPaceWarning(false)} className="ml-2 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
       {isPaused && (
         <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex flex-col items-center justify-center">
           <div className="p-8 rounded-2xl bg-card border border-border shadow-2xl text-center max-w-sm mx-4">
