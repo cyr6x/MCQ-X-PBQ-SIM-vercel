@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isMCQCorrect, calculateScore, getPBQCredit } from '@/lib/examEngine';
-import type { MCQuestion, PBQuestion } from '@/data/questions';
+import type { MCQuestion, PBQuestion, PBQTerminal, PBQPacketAnalysis, PBQTopology } from '@/data/questions';
+import { advancedPBQs } from '@/data/advancedQuestions';
 
 const single: MCQuestion = {
   id: 'm1', domain: 'D1', type: 'single', difficulty: 1,
@@ -41,6 +42,30 @@ describe('examEngine', () => {
   it('calculates equal-weight PBQ practice partial credit', () => {
     expect(getPBQCredit(firewall, ['ALLOW', 'ALLOW'])).toEqual({ earned: 1, total: 2, ratio: 0.5 });
     expect(getPBQCredit(firewall, ['ALLOW', 'DENY'])).toEqual({ earned: 2, total: 2, ratio: 1 });
+  });
+
+  it('scores terminal, packet-analysis and topology PBQs', () => {
+    const terminal = advancedPBQs.find(q => q.type === 'terminal') as PBQTerminal;
+    const packet = advancedPBQs.find(q => q.type === 'packet-analysis') as PBQPacketAnalysis;
+    const topology = advancedPBQs.find(q => q.type === 'topology') as PBQTopology;
+
+    const terminalAnswers = terminal.tasks.map(task => task.correctIndex);
+    expect(getPBQCredit(terminal, terminalAnswers).ratio).toBe(1);
+
+    expect(getPBQCredit(packet, {
+      packetIds: [...packet.suspiciousPacketIds],
+      attackType: packet.correctAttackType,
+      response: packet.correctResponse,
+    }).ratio).toBe(1);
+
+    expect(getPBQCredit(packet, {
+      packetIds: [packet.suspiciousPacketIds[0]],
+      attackType: packet.correctAttackType,
+      response: packet.correctResponse,
+    }).ratio).toBeCloseTo(2 / 3);
+
+    const topologyAnswers = Object.fromEntries(topology.nodes.map(node => [node.id, node.correctZone]));
+    expect(getPBQCredit(topology, topologyAnswers).ratio).toBe(1);
   });
 
   it('calculates scaled score on 100-900 scale', () => {
