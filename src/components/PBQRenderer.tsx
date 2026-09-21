@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, XCircle, GripVertical, ListChecks, MousePointer2 } from 'lucide-react';
-import type { PBQuestion, PBQFirewall, PBQOrdering, PBQLogAnalysis, PBQMatching, PBQPlacement } from '@/data/questions';
+import type { PBQuestion, PBQFirewall, PBQOrdering, PBQLogAnalysis, PBQMatching, PBQPlacement, PBQTerminal, PBQPacketAnalysis, PBQTopology } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
 
 /**
@@ -33,6 +33,9 @@ export function PBQRenderer({
     'log-analysis': 'SIEM / log analysis',
     matching: 'Matching',
     placement: 'Topology placement',
+    terminal: 'Terminal / CLI',
+    'packet-analysis': 'Packet analysis',
+    topology: 'Network topology',
   }[q.type];
 
   return (
@@ -65,6 +68,9 @@ export function PBQRenderer({
           {q.type === 'log-analysis' && <LogAnalysisPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
           {q.type === 'matching' && <MatchingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
           {q.type === 'placement' && <PlacementPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'terminal' && <TerminalPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'packet-analysis' && <PacketAnalysisPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'topology' && <TopologyPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
         </section>
       </div>
 
@@ -494,6 +500,321 @@ function PlacementPBQ({ q, ans, onAns, show }: { q: PBQPlacement; ans: Record<st
                 })}
               </div>
             </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
+function TerminalPBQ({ q, ans, onAns, show }: { q: PBQTerminal; ans: number[]; onAns: (a: number[]) => void; show: boolean }) {
+  const current = Array.isArray(ans) ? ans : [];
+  const setAnswer = (taskIndex: number, optionIndex: number) => {
+    if (show) return;
+    const next = [...current];
+    next[taskIndex] = optionIndex;
+    onAns(next);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#071018] shadow-xl">
+        <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+          <span className="h-2.5 w-2.5 rounded-full bg-destructive" />
+          <span className="h-2.5 w-2.5 rounded-full bg-warning" />
+          <span className="h-2.5 w-2.5 rounded-full bg-success" />
+          <span className="ml-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">incident-terminal</span>
+        </div>
+        <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap p-5 font-mono text-xs leading-6 text-slate-200">
+          {q.transcript.join('\n')}
+        </pre>
+      </div>
+
+      <div className="space-y-4">
+        {q.tasks.map((task, taskIndex) => {
+          const selected = current[taskIndex];
+          const correct = selected === task.correctIndex;
+          return (
+            <div key={taskIndex} className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+              <div className="mb-3 flex items-start gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted font-mono text-xs font-black text-muted-foreground">
+                  {taskIndex + 1}
+                </span>
+                <p className="text-sm font-semibold leading-6">{task.prompt}</p>
+              </div>
+              <div className="grid gap-2">
+                {task.options.map((option, optionIndex) => {
+                  const isSelected = selected === optionIndex;
+                  const isCorrect = optionIndex === task.correctIndex;
+                  const cls = show
+                    ? isCorrect
+                      ? 'border-success/50 bg-success/10 text-success'
+                      : isSelected
+                        ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                        : 'border-border bg-muted/20 text-muted-foreground'
+                    : isSelected
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background/40 text-foreground hover:border-primary/40';
+
+                  return (
+                    <button
+                      key={optionIndex}
+                      onClick={() => setAnswer(taskIndex, optionIndex)}
+                      disabled={show}
+                      className={`rounded-xl border px-4 py-3 text-left font-mono text-[11px] leading-5 transition-all ${cls}`}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+              {show && (
+                <div className={`mt-3 rounded-lg border-l-2 px-3 py-2 text-xs leading-5 ${correct ? 'border-success bg-success/5 text-success' : 'border-warning bg-warning/5 text-muted-foreground'}`}>
+                  {correct ? 'Correct. ' : `Correct command: ${task.options[task.correctIndex]}. `}
+                  {task.feedback}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PacketAnalysisPBQ({ q, ans, onAns, show }: { q: PBQPacketAnalysis; ans: any; onAns: (a: any) => void; show: boolean }) {
+  const current = ans || { packetIds: [] };
+  const packetIds: string[] = Array.isArray(current.packetIds) ? current.packetIds : [];
+
+  const update = (patch: Record<string, any>) => {
+    if (show) return;
+    onAns({ ...current, ...patch });
+  };
+
+  const togglePacket = (id: string) => {
+    if (show) return;
+    update({
+      packetIds: packetIds.includes(id)
+        ? packetIds.filter(packetId => packetId !== id)
+        : [...packetIds, id],
+    });
+  };
+
+  const samePackets =
+    packetIds.length === q.suspiciousPacketIds.length &&
+    [...packetIds].sort().join('|') === [...q.suspiciousPacketIds].sort().join('|');
+
+  return (
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
+          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Packet list</span>
+          <span className="font-mono text-[10px] text-muted-foreground">Select suspicious rows</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-left">
+            <thead className="bg-background/40">
+              <tr>
+                {['Sel', 'No.', 'Time', 'Source', 'Destination', 'Proto', 'Info'].map(h => (
+                  <th key={h} className="border-b border-border px-3 py-2 text-[9px] font-black uppercase tracking-wider text-muted-foreground">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {q.packets.map(packet => {
+                const selected = packetIds.includes(packet.id);
+                const shouldSelect = q.suspiciousPacketIds.includes(packet.id);
+                const rowClass = show
+                  ? shouldSelect
+                    ? 'bg-success/5'
+                    : selected
+                      ? 'bg-destructive/5'
+                      : ''
+                  : selected
+                    ? 'bg-primary/10'
+                    : 'hover:bg-muted/20';
+                return (
+                  <tr key={packet.id} onClick={() => togglePacket(packet.id)} className={`transition-colors ${!show ? 'cursor-pointer' : ''} ${rowClass}`}>
+                    <td className="px-3 py-2">
+                      <input type="checkbox" readOnly checked={selected} className="h-4 w-4 accent-current" />
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[10px]">{packet.id}</td>
+                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{packet.time}</td>
+                    <td className="px-3 py-2 font-mono text-[10px]">{packet.source}</td>
+                    <td className="px-3 py-2 font-mono text-[10px]">{packet.destination}</td>
+                    <td className="px-3 py-2 font-mono text-[10px] font-bold text-accent">{packet.protocol}</td>
+                    <td className="px-3 py-2 font-mono text-[10px] text-muted-foreground">{packet.summary}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {show && (
+          <div className={`border-t border-border px-4 py-3 text-xs font-bold ${samePackets ? 'text-success' : 'text-warning'}`}>
+            {samePackets ? 'Packet selection correct.' : `Model selection: packets ${q.suspiciousPacketIds.join(', ')}.`}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-muted-foreground">Attack pattern</label>
+          <select
+            value={current.attackType || ''}
+            onChange={e => update({ attackType: e.target.value })}
+            disabled={show}
+            className="w-full rounded-xl border border-border bg-muted px-3 py-3 text-sm"
+          >
+            <option value="">Select...</option>
+            {q.attackOptions.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+          {show && (
+            <p className={`mt-2 text-xs font-bold ${current.attackType === q.correctAttackType ? 'text-success' : 'text-destructive'}`}>
+              {current.attackType === q.correctAttackType ? 'Correct' : `Correct: ${q.correctAttackType}`}
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-muted-foreground">Best response</label>
+          <div className="grid gap-2">
+            {q.responseOptions.map((option, index) => {
+              const selected = current.response === index;
+              const correct = index === q.correctResponse;
+              return (
+                <button
+                  key={index}
+                  onClick={() => update({ response: index })}
+                  disabled={show}
+                  className={`rounded-xl border px-3 py-3 text-left text-xs leading-5 ${
+                    show
+                      ? correct
+                        ? 'border-success/50 bg-success/10 text-success'
+                        : selected
+                          ? 'border-destructive/50 bg-destructive/10 text-destructive'
+                          : 'border-border bg-muted/20 text-muted-foreground'
+                      : selected
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/40'
+                  }`}
+                >
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TopologyPBQ({ q, ans, onAns, show }: { q: PBQTopology; ans: Record<string, string>; onAns: (a: Record<string, string>) => void; show: boolean }) {
+  const current = ans || {};
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+
+  const place = (zone: string) => {
+    if (show || !selectedNode) return;
+    onAns({ ...current, [selectedNode]: zone });
+    setSelectedNode(null);
+  };
+
+  const unassigned = q.nodes.filter(node => !current[node.id]);
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-border bg-muted/20 p-4">
+        <div className="mb-3 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Required flows</div>
+        <div className="flex flex-wrap gap-2">
+          {q.connections.map(([from, to], index) => (
+            <span key={index} className="rounded-full border border-border bg-card px-3 py-1.5 font-mono text-[10px] text-muted-foreground">
+              {from} → {to}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {!show && (
+        <div className="rounded-2xl border-2 border-dashed border-border bg-background/40 p-4">
+          <div className="mb-3 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Unplaced components — select one, then select a zone</div>
+          <div className="flex flex-wrap gap-2">
+            {unassigned.map(node => (
+              <button
+                key={node.id}
+                onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
+                className={`rounded-xl border px-3 py-2 text-left text-xs transition-all ${
+                  selectedNode === node.id ? 'border-accent bg-accent/10 text-accent ring-2 ring-accent/20' : 'border-border bg-card hover:border-primary/40'
+                }`}
+              >
+                <span className="block font-bold">{node.label}</span>
+                <span className="mt-0.5 block text-[10px] text-muted-foreground">{node.role}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {q.zones.map(zone => {
+          const nodes = q.nodes.filter(node => current[node.id] === zone || (show && node.correctZone === zone && !current[node.id]));
+          return (
+            <section
+              key={zone}
+              onClick={() => place(zone)}
+              className={`min-h-[180px] rounded-2xl border-2 p-4 transition-all ${
+                selectedNode && !show ? 'cursor-pointer border-accent/40 bg-accent/5' : 'border-border bg-card'
+              }`}
+            >
+              <div className="mb-4 border-b border-border pb-2 text-center text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                {zone}
+              </div>
+              <div className="space-y-2">
+                {nodes.map(node => {
+                  const assigned = current[node.id] === zone;
+                  const correct = node.correctZone === zone;
+                  return (
+                    <div
+                      key={node.id}
+                      className={`rounded-xl border p-3 text-xs ${
+                        show
+                          ? assigned && correct
+                            ? 'border-success/40 bg-success/10 text-success'
+                            : assigned && !correct
+                              ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                              : 'border-success/20 bg-success/5 text-success'
+                          : 'border-border bg-background/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-bold">{node.label}</div>
+                          <div className="mt-1 text-[10px] leading-4 text-muted-foreground">{node.role}</div>
+                        </div>
+                        {!show && assigned && (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              const next = { ...current };
+                              delete next[node.id];
+                              onAns(next);
+                            }}
+                            className="text-muted-foreground hover:text-destructive"
+                            aria-label={`Remove ${node.label}`}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      {show && assigned && !correct && (
+                        <div className="mt-2 text-[10px] font-black uppercase text-success">Correct zone: {node.correctZone}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>
