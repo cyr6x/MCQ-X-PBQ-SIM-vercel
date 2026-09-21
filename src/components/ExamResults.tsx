@@ -30,6 +30,7 @@ interface ExamResultsProps {
   pbqAnswers: Record<string, any>;
   mcqAnswers: Record<string, number | number[]>;
   flags?: Set<string>;
+  questionOrder?: string[];
   onRestart: () => void;
   onBackToMenu: () => void;
 }
@@ -127,6 +128,7 @@ export function ExamResults({
   pbqAnswers,
   mcqAnswers,
   flags = new Set<string>(),
+  questionOrder,
   onRestart,
   onBackToMenu,
 }: ExamResultsProps) {
@@ -167,8 +169,14 @@ export function ExamResults({
       userAnswer: mcqAnswers[q.id],
     }));
 
-    return [...pbqItems, ...mcqItems];
-  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, flags]);
+    const items = [...pbqItems, ...mcqItems];
+    if (!questionOrder?.length) return items.map((item, index) => ({ ...item, num: index + 1 }));
+
+    const positions = new Map(questionOrder.map((id, index) => [id, index]));
+    return items
+      .sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+      .map((item, index) => ({ ...item, num: index + 1 }));
+  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, flags, questionOrder]);
 
   const counts = useMemo(() => ({
     correct: reviewItems.filter(item => item.status === 'correct').length,
