@@ -1,3 +1,5 @@
+import { advancedMCQs, advancedPBQs } from './advancedQuestions';
+
 /**
  * CompTIA Security+ SY0-701 Master Question Bank
  * 300+ questions: 200 MCQ single, 50 select-two, 50+ PBQ scenarios
@@ -23,6 +25,10 @@ export const DOMAIN_WEIGHTS: Record<Domain, number> = {
   D1: 0.12, D2: 0.22, D3: 0.18, D4: 0.28, D5: 0.20,
 };
 
+export type EvidenceBlock =
+  | { type: 'log' | 'terminal' | 'packet' | 'note'; title: string; lines: string[]; caption?: string }
+  | { type: 'table'; title: string; headers: string[]; rows: string[][]; caption?: string };
+
 export interface MCQuestion {
   id: string;
   domain: Domain;
@@ -35,6 +41,7 @@ export interface MCQuestion {
   whyWrong?: Record<number, string>;
   objective?: string;
   reference?: string;
+  evidence?: EvidenceBlock[];
 }
 
 /* =================================================================
@@ -104,13 +111,62 @@ export interface PBQPlacement {
   objective?: string;
 }
 
-export type PBQuestion = PBQFirewall | PBQOrdering | PBQLogAnalysis | PBQMatching | PBQPlacement;
+export interface PBQTerminal {
+  id: string; domain: Domain; difficulty: 1|2|3; type: 'terminal';
+  title: string; scenario: string;
+  transcript: string[];
+  tasks: { prompt: string; options: string[]; correctIndex: number; feedback: string }[];
+  explanation: string;
+  objective?: string;
+}
+
+export interface PacketRow {
+  id: string;
+  time: string;
+  source: string;
+  destination: string;
+  protocol: string;
+  summary: string;
+}
+
+export interface PBQPacketAnalysis {
+  id: string; domain: Domain; difficulty: 1|2|3; type: 'packet-analysis';
+  title: string; scenario: string;
+  packets: PacketRow[];
+  suspiciousPacketIds: string[];
+  attackOptions: string[];
+  correctAttackType: string;
+  responseOptions: string[];
+  correctResponse: number;
+  explanation: string;
+  objective?: string;
+}
+
+export interface PBQTopology {
+  id: string; domain: Domain; difficulty: 1|2|3; type: 'topology';
+  title: string; scenario: string;
+  zones: string[];
+  nodes: { id: string; label: string; role: string; correctZone: string }[];
+  connections: [string, string][];
+  explanation: string;
+  objective?: string;
+}
+
+export type PBQuestion =
+  | PBQFirewall
+  | PBQOrdering
+  | PBQLogAnalysis
+  | PBQMatching
+  | PBQPlacement
+  | PBQTerminal
+  | PBQPacketAnalysis
+  | PBQTopology;
 
 /* =================================================================
    MCQ BANK — 200 Single-Answer Questions
    ================================================================= */
 
-export const mcqSingle: MCQuestion[] = [
+const baseMcqSingle: MCQuestion[] = [
   // ── DOMAIN 1: General Security Concepts ──
   { id:'s1', domain:'D1', type:'single', difficulty:1, question:'Which element of the CIA triad ensures data has not been tampered with?', options:['Confidentiality','Integrity','Availability','Non-repudiation'], answer:1, explanation:'Integrity ensures data has not been altered during storage or transmission.', objective:'1.2' },
   { id:'s2', domain:'D1', type:'single', difficulty:1, question:'Using git is most frequently associated with which change management process?', options:['Backout plan','Stakeholder analysis','Version control','Standard operating procedures'], answer:2, explanation:'Git is the most widely used version control system for tracking code changes.', objective:'1.3' },
@@ -330,6 +386,8 @@ export const mcqSingle: MCQuestion[] = [
   { id:'s200', domain:'D5', type:'single', difficulty:2, question:"During an M&A review, counsel says the firm performed due diligence and is now performing due care. Which statement BEST distinguishes the two?", options:['They are interchangeable','Due diligence is the investigation; due care is acting reasonably on what was learned','Due care is the investigation; due diligence is action','Both are post-incident only'], answer:1, explanation:'Due diligence gathers facts; due care is the ongoing reasonable action that follows.', whyWrong:{0:'They describe different obligations.',2:'It reverses the correct definitions.',3:'Both are continuous, not post-incident only.'}, objective:'5.1' },
 ];
 
+export const mcqSingle: MCQuestion[] = [...baseMcqSingle, ...advancedMCQs];
+
 /* =================================================================
    MCQ BANK — 50 Select-Two Questions
    ================================================================= */
@@ -392,7 +450,7 @@ export const mcqSelectTwo: MCQuestion[] = [
    PBQ BANK — 50+ Performance-Based Questions
    ================================================================= */
 
-export const pbqBank: PBQuestion[] = [
+const basePbqBank: PBQuestion[] = [
   // ── TYPE 1: FIREWALL ACL ──
   {
     id:'pbq-fw1', domain:'D4', difficulty:2, type:'firewall',
@@ -1207,6 +1265,8 @@ export const pbqBank: PBQuestion[] = [
   },
 ];
 
+export const pbqBank: PBQuestion[] = [...basePbqBank, ...advancedPBQs];
+
 /* =================================================================
    EXAM BUILDER — Constructs randomized 90-question exams
    ================================================================= */
@@ -1277,13 +1337,19 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
   const seed = EXAM_SEEDS[examNumber];
 
-  // Pick 6 PBQs (mix of types) — seeded per exam number
-  const fwPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'firewall'),     seed).slice(0, 2);
-  const irPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'ordering'),     seed + 1).slice(0, 1);
-  const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 2).slice(0, 1);
-  const matchPbqs = seededShuffle(pbqBank.filter(p => p.type === 'matching'),   seed + 3).slice(0, 1);
-  const placePbqs = seededShuffle(pbqBank.filter(p => p.type === 'placement'),  seed + 4).slice(0, 1);
-  const pbqs = shuffle([...fwPbqs, ...irPbqs, ...logPbqs, ...matchPbqs, ...placePbqs]);
+  // Pick 6 PBQs with a deliberate mix of classic and advanced interaction types.
+  // Each exam includes terminal, packet-analysis and topology work plus three
+  // established PBQ formats so practice covers both knowledge and manipulation.
+  const fwPbqs = seededShuffle(pbqBank.filter(p => p.type === 'firewall'), seed).slice(0, 1);
+  const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 1).slice(0, 1);
+  const classicOther = seededShuffle(
+    pbqBank.filter(p => p.type === 'ordering' || p.type === 'matching' || p.type === 'placement'),
+    seed + 2,
+  ).slice(0, 1);
+  const terminalPbqs = seededShuffle(pbqBank.filter(p => p.type === 'terminal'), seed + 3).slice(0, 1);
+  const packetPbqs = seededShuffle(pbqBank.filter(p => p.type === 'packet-analysis'), seed + 4).slice(0, 1);
+  const topologyPbqs = seededShuffle(pbqBank.filter(p => p.type === 'topology'), seed + 5).slice(0, 1);
+  const pbqs = shuffle([...fwPbqs, ...logPbqs, ...classicOther, ...terminalPbqs, ...packetPbqs, ...topologyPbqs]);
 
   // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
   // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).

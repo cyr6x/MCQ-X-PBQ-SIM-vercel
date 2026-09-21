@@ -21,6 +21,7 @@ import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
 import { PBQRenderer } from '@/components/PBQRenderer';
+import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 
 interface ExamResultsProps {
   score: ScoreResult;
@@ -29,6 +30,7 @@ interface ExamResultsProps {
   pbqAnswers: Record<string, any>;
   mcqAnswers: Record<string, number | number[]>;
   flags?: Set<string>;
+  questionOrder?: string[];
   onRestart: () => void;
   onBackToMenu: () => void;
 }
@@ -106,6 +108,16 @@ function pbqModelAnswer(q: PBQuestion): any {
       return Object.fromEntries(q.items.map(item => [item.left, item.correctRight]));
     case 'placement':
       return Object.fromEntries(q.items.map(item => [item.label, item.correctZone]));
+    case 'terminal':
+      return q.tasks.map(task => task.correctIndex);
+    case 'packet-analysis':
+      return {
+        packetIds: [...q.suspiciousPacketIds],
+        attackType: q.correctAttackType,
+        response: q.correctResponse,
+      };
+    case 'topology':
+      return Object.fromEntries(q.nodes.map(node => [node.id, node.correctZone]));
   }
 }
 
@@ -116,6 +128,7 @@ export function ExamResults({
   pbqAnswers,
   mcqAnswers,
   flags = new Set<string>(),
+  questionOrder,
   onRestart,
   onBackToMenu,
 }: ExamResultsProps) {
@@ -156,8 +169,14 @@ export function ExamResults({
       userAnswer: mcqAnswers[q.id],
     }));
 
-    return [...pbqItems, ...mcqItems];
-  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, flags]);
+    const items = [...pbqItems, ...mcqItems];
+    if (!questionOrder?.length) return items.map((item, index) => ({ ...item, num: index + 1 }));
+
+    const positions = new Map(questionOrder.map((id, index) => [id, index]));
+    return items
+      .sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+      .map((item, index) => ({ ...item, num: index + 1 }));
+  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, flags, questionOrder]);
 
   const counts = useMemo(() => ({
     correct: reviewItems.filter(item => item.status === 'correct').length,
@@ -427,6 +446,7 @@ function MCQReview({ item }: { item: Extract<ReviewItem, { type: 'mcq' }> }) {
 
   return (
     <div className="space-y-5">
+      <EvidenceBlocks evidence={q.evidence} defaultOpen />
       <div className="grid gap-3">
         {q.options.map((option, index) => {
           const isSelected = selected(index);
@@ -526,6 +546,7 @@ function RetestMCQ({ q }: { q: MCQuestion }) {
         </div>
         <button onClick={() => { setOpen(false); reset(); }} className="text-[10px] font-bold text-muted-foreground hover:text-foreground">Close</button>
       </div>
+      <EvidenceBlocks evidence={q.evidence} />
       <div className="grid gap-2">
         {q.options.map((option, index) => (
           <button

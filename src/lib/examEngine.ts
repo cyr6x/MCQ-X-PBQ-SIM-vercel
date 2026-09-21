@@ -56,7 +56,10 @@ export function getPBQCredit(q: PBQuestion, ans: any): PBQCredit {
       q.type === 'ordering' ? q.steps.length :
       q.type === 'log-analysis' ? 3 :
       q.type === 'matching' ? q.items.length :
-      q.items.length;
+      q.type === 'placement' ? q.items.length :
+      q.type === 'terminal' ? q.tasks.length :
+      q.type === 'packet-analysis' ? 3 :
+      q.nodes.length;
     return { earned: 0, total: Math.max(1, total), ratio: 0 };
   }
 
@@ -88,6 +91,25 @@ export function getPBQCredit(q: PBQuestion, ans: any): PBQCredit {
     case 'placement':
       total = q.items.length;
       earned = q.items.reduce((sum, item) => sum + (ans?.[item.label] === item.correctZone ? 1 : 0), 0);
+      break;
+    case 'terminal':
+      total = q.tasks.length;
+      earned = q.tasks.reduce((sum, task, index) => sum + ((ans as number[])?.[index] === task.correctIndex ? 1 : 0), 0);
+      break;
+    case 'packet-analysis': {
+      total = 3;
+      const a = ans as { packetIds?: string[]; attackType?: string; response?: number };
+      const selected = [...(a.packetIds || [])].sort();
+      const expected = [...q.suspiciousPacketIds].sort();
+      earned =
+        (JSON.stringify(selected) === JSON.stringify(expected) ? 1 : 0) +
+        (a.attackType === q.correctAttackType ? 1 : 0) +
+        (a.response === q.correctResponse ? 1 : 0);
+      break;
+    }
+    case 'topology':
+      total = q.nodes.length;
+      earned = q.nodes.reduce((sum, node) => sum + (ans?.[node.id] === node.correctZone ? 1 : 0), 0);
       break;
   }
 

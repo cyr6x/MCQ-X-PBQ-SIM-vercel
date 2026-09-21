@@ -5,6 +5,7 @@ import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { isMCQCorrect, isPBQCorrect, calculateScore, type ScoreResult } from '@/lib/examEngine';
 import { ExamResults } from '@/components/ExamResults';
 import { PBQRenderer } from '@/components/PBQRenderer';
+import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { saveAttempt, type QuestionAttempt, type ExamAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
@@ -233,7 +234,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   };
 
   if (submitted && scoreResult && !isStudyMode) {
-    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
+    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} questionOrder={questions.map(q => q.data.id)} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
   }
 
   const timerMins = Math.floor(remaining / 60);
@@ -608,8 +609,9 @@ function MCQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: MCQuestio
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <h3 className="text-xl font-bold leading-relaxed mb-8">{q.question}</h3>
+      <h3 className="text-xl font-bold leading-relaxed mb-5">{q.question}</h3>
       {q.type === 'select-two' && <div className="mb-4 px-3 py-1 rounded bg-accent/10 border border-accent/20 text-accent text-[10px] font-black inline-block tracking-widest">SELECT EXACTLY TWO</div>}
+      <EvidenceBlocks evidence={q.evidence} />
       
       <div className="grid gap-3">
         {q.options.map((opt, i) => {

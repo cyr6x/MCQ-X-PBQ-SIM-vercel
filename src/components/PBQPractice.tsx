@@ -12,6 +12,9 @@ const TYPE_LABELS: Record<PBQType, string> = {
   'log-analysis': 'Log Analysis',
   matching: 'Matching / Drag-Drop',
   placement: 'Network Placement',
+  terminal: 'Terminal / CLI',
+  'packet-analysis': 'Packet Analysis',
+  topology: 'Network Topology',
 };
 
 const TYPE_DESCRIPTIONS: Record<PBQType, string> = {
@@ -20,6 +23,9 @@ const TYPE_DESCRIPTIONS: Record<PBQType, string> = {
   'log-analysis': 'Read SIEM/audit logs, identify the attack, the threat source, and the correct mitigation.',
   matching: 'Drag concepts (algorithms, controls, attack types) into the correct categories.',
   placement: 'Place network components (firewalls, IDS, jump hosts) into the correct zones (DMZ, Internal, Cloud).',
+  terminal: 'Interpret command-line evidence and choose safe investigation or containment commands.',
+  'packet-analysis': 'Inspect Wireshark-style packet rows, identify suspicious traffic, and select the best response.',
+  topology: 'Build segmented architectures by placing components into security zones while preserving required flows.',
 };
 
 interface Props {
@@ -69,7 +75,7 @@ export function PBQPractice({ onFinish }: Props) {
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-1">PEARSON-STYLE • SY0-701</p>
               <h1 className="text-3xl font-black">PBQ Practice Lab</h1>
-              <p className="text-sm text-muted-foreground mt-1">All five Performance-Based Question formats from the real CompTIA Security+ exam — drilled, untimed, with full explanations.</p>
+              <p className="text-sm text-muted-foreground mt-1">Eight simulator interaction formats for SY0-701 practice — drilled, untimed, with full explanations and subtask feedback.</p>
             </div>
             <button onClick={onFinish} className="p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground" aria-label="Back to menu">
               <LogOut className="h-4 w-4" />
@@ -91,7 +97,7 @@ export function PBQPractice({ onFinish }: Props) {
                   <span className="text-sm font-black">All Types</span>
                   <span className="text-xs font-mono text-muted-foreground">{typeCounts.all}</span>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">Full mix — exactly what you'll face on exam day.</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">Full mix across the simulator's current task families.</p>
               </button>
               {(Object.keys(TYPE_LABELS) as PBQType[]).map(t => (
                 <button
