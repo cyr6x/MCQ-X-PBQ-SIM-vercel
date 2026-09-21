@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isMCQCorrect, calculateScore } from '@/lib/examEngine';
+import { isMCQCorrect, calculateScore, getPBQCredit } from '@/lib/examEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 
 const single: MCQuestion = {
@@ -9,6 +9,21 @@ const single: MCQuestion = {
 const multi: MCQuestion = {
   id: 'm2', domain: 'D2', type: 'select-two', difficulty: 1,
   question: 'q', options: ['a','b','c','d'], answer: [0, 3], explanation: '',
+};
+
+const firewall: PBQuestion = {
+  id: 'p1',
+  domain: 'D4',
+  difficulty: 2,
+  type: 'firewall',
+  title: 'Firewall rules',
+  scenario: 'Apply the correct action to each rule.',
+  rules: [
+    { ruleId: 1, sourceIP: '10.0.0.1', destIP: '10.0.0.2', port: '443', protocol: 'TCP', action: '' },
+    { ruleId: 2, sourceIP: '10.0.0.3', destIP: '10.0.0.4', port: '22', protocol: 'TCP', action: '' },
+  ],
+  correctActions: ['ALLOW', 'DENY'],
+  explanation: 'One rule should be allowed and one denied.',
 };
 
 describe('examEngine', () => {
@@ -21,6 +36,11 @@ describe('examEngine', () => {
   it('scores select-two regardless of order', () => {
     expect(isMCQCorrect(multi, [3, 0])).toBe(true);
     expect(isMCQCorrect(multi, [0, 1])).toBe(false);
+  });
+
+  it('calculates equal-weight PBQ practice partial credit', () => {
+    expect(getPBQCredit(firewall, ['ALLOW', 'ALLOW'])).toEqual({ earned: 1, total: 2, ratio: 0.5 });
+    expect(getPBQCredit(firewall, ['ALLOW', 'DENY'])).toEqual({ earned: 2, total: 2, ratio: 1 });
   });
 
   it('calculates scaled score on 100-900 scale', () => {
