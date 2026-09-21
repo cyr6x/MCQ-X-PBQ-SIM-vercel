@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, AlertTriangle, Clock, Timer, Pause, Play, Shuffle, LogOut, Lock } from 'lucide-react';
+import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, AlertTriangle, Clock, Pause, Play, Shuffle, LogOut } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { isMCQCorrect, isPBQCorrect, calculateScore, type ScoreResult } from '@/lib/examEngine';
@@ -7,34 +7,20 @@ import { ExamResults } from '@/components/ExamResults';
 import { PBQRenderer } from '@/components/PBQRenderer';
 import { saveAttempt, type QuestionAttempt, type ExamAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
+import { objectiveLabel } from '@/lib/sy0701Objectives';
 
 type UnifiedQ = { kind: 'pbq'; data: PBQuestion } | { kind: 'mcq'; data: MCQuestion };
 
 /**
- * Spread PBQs evenly across the MCQs instead of clustering them all at the
- * front of the exam. Both inputs are assumed to already be independently
- * shuffled; this only controls the interleaving positions.
+ * Keep PBQs at the front, then MCQs. This more closely resembles commonly
+ * reported Pearson VUE / CompTIA delivery while preserving normal flagging and
+ * review navigation throughout the attempt.
  */
-function interleavePbqs(pbqs: PBQuestion[], mcqs: MCQuestion[]): UnifiedQ[] {
-  if (pbqs.length === 0) return mcqs.map(q => ({ kind: 'mcq' as const, data: q }));
-  if (mcqs.length === 0) return pbqs.map(q => ({ kind: 'pbq' as const, data: q }));
-
-  const result: UnifiedQ[] = [];
-  const gap = mcqs.length / (pbqs.length + 1); // MCQs consumed between each PBQ
-  let pbqIdx = 0;
-  let mcqIdx = 0;
-  let nextPbqAt = gap;
-
-  while (pbqIdx < pbqs.length || mcqIdx < mcqs.length) {
-    const dueForPbq = pbqIdx < pbqs.length && (mcqIdx >= nextPbqAt || mcqIdx >= mcqs.length);
-    if (dueForPbq) {
-      result.push({ kind: 'pbq', data: pbqs[pbqIdx++] });
-      nextPbqAt += gap;
-    } else {
-      result.push({ kind: 'mcq', data: mcqs[mcqIdx++] });
-    }
-  }
-  return result;
+function arrangeQuestions(pbqs: PBQuestion[], mcqs: MCQuestion[]): UnifiedQ[] {
+  return [
+    ...pbqs.map(data => ({ kind: 'pbq' as const, data })),
+    ...mcqs.map(data => ({ kind: 'mcq' as const, data })),
+  ];
 }
 
 interface NewExamEngineProps {
@@ -50,15 +36,12 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   // Bumped by the Shuffle button to re-randomize question order + MCQ option order.
   const [shuffleNonce, setShuffleNonce] = useState(0);
 
-  // PBQs are spread evenly across the exam (not clustered at the start) so the
-  // performance-based questions don't all land back-to-back. Each individual
-  // PBQ still locks once you move on from it — you just can't jump back to a
-  // PBQ you've already passed — which mirrors the real CompTIA "no return to
-  // PBQs" rule at per-question granularity instead of one big front section.
+  // Shuffle within question families, then present PBQs first. PBQs remain
+  // reviewable and flaggable like other exam items.
   const questions = useMemo<UnifiedQ[]>(() => {
     const shuffledMcqs = [...mcqs].sort(() => Math.random() - 0.5);
     const shuffledPbqs = [...pbqs].sort(() => Math.random() - 0.5);
-    return interleavePbqs(shuffledPbqs, shuffledMcqs);
+    return arrangeQuestions(shuffledPbqs, shuffledMcqs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pbqs, mcqs, shuffleNonce]);
 
@@ -71,9 +54,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const [submitted, setSubmitted] = useState(false);
   const [showNav, setShowNav] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
-  const [showPbqLock, setShowPbqLock] = useState(false);
-  // Which PBQs (by id) have already been left and can no longer be revisited.
-  const [lockedPbqIds, setLockedPbqIds] = useState<Set<string>>(new Set());
   const [warned30, setWarned30] = useState(false);
   const [warned10, setWarned10] = useState(false);
   const [warningBanner, setWarningBanner] = useState<null | '30' | '10'>(null);
@@ -91,9 +71,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
 
   const cur = questions[idx];
   const qId = cur.kind === 'pbq' ? cur.data.id : cur.data.id;
-  // PBQs are interleaved throughout `questions` — there's no contiguous
-  // "PBQ section" anymore, so the lock is tracked per-question (lockedPbqIds)
-  // instead of by array position.
 
   // Timer logic with Pause
   useEffect(() => {
@@ -230,30 +207,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     if (isPaused) return;
     if (newIdx < 0 || newIdx >= questions.length) return;
     if (newIdx === idx) return;
-
-    const target = questions[newIdx];
-    // Per-question PBQ lock: once you leave a PBQ, you cannot come back to it
-    // (mirrors the real CompTIA "no return to PBQs" rule, applied per-question
-    // now that PBQs are spread throughout the exam instead of one front section).
-    if (!isStudyMode && target.kind === 'pbq' && lockedPbqIds.has(target.data.id)) {
-      return; // hard block — this PBQ was already left and is locked
-    }
-    const leavingUnlockedPbq = !isStudyMode && cur.kind === 'pbq' && !lockedPbqIds.has(cur.data.id);
-    if (leavingUnlockedPbq) {
-      setShowPbqLock(true);
-      (window as any).__pendingIdx = newIdx;
-      return;
-    }
     setIdx(newIdx);
-  };
-
-  const confirmLeavePbqs = () => {
-    if (cur.kind === 'pbq') {
-      setLockedPbqIds(prev => new Set(prev).add(cur.data.id));
-    }
-    setShowPbqLock(false);
-    const pending = (window as any).__pendingIdx;
-    if (typeof pending === 'number') setIdx(pending);
   };
 
   const handleShuffle = () => {
@@ -265,7 +219,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     setPbqAnswers({});
     setMcqAnswers({});
     setFlags(new Set());
-    setLockedPbqIds(new Set());
     setQuestionTimes({});
     setQStartTime(Date.now());
   };
@@ -280,7 +233,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   };
 
   if (submitted && scoreResult && !isStudyMode) {
-    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
+    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
   }
 
   const timerMins = Math.floor(remaining / 60);
@@ -325,22 +278,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 rounded-md border border-border text-sm">Continue Exam</button>
             <button onClick={handleSubmit} className="px-4 py-2 rounded-md bg-accent text-accent-foreground font-bold text-sm">Submit</button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Per-PBQ lock confirmation */}
-      <Dialog open={showPbqLock} onOpenChange={setShowPbqLock}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-warning" /> Leave this Performance-Based Question?</DialogTitle>
-            <DialogDescription>
-              Once you move on, you will <strong>not be able to return</strong> to this PBQ. This mirrors the real CompTIA exam.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setShowPbqLock(false)} className="px-4 py-2 rounded-md border border-border text-sm">Stay on this PBQ</button>
-            <button onClick={confirmLeavePbqs} className="px-4 py-2 rounded-md bg-warning text-warning-foreground font-bold text-sm">Continue</button>
           </div>
         </DialogContent>
       </Dialog>
@@ -421,7 +358,8 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto bg-[#fafafa] dark:bg-background">
-        <div className="max-w-4xl mx-auto p-4 sm:p-8">
+        <div className="mx-auto grid max-w-7xl gap-6 p-4 sm:p-8 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0">
           
           {/* Progress Grid */}
           {showNav && (
@@ -441,25 +379,22 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
                     : mcqAnswers[id] !== undefined;
                   const flagged = flags.has(id);
                   const isPBQ = q.kind === 'pbq';
-                  const locked = isPBQ && lockedPbqIds.has(id);
 
                   return (
                     <button
                       key={i}
                       onClick={() => goTo(i)}
-                      disabled={locked}
-                      title={locked ? `Q${i + 1} — Performance-Based (locked)` : isPBQ ? `Q${i + 1} — Performance-Based` : `Q${i + 1}`}
+                      title={isPBQ ? `Q${i + 1} — Performance-Based` : `Q${i + 1}`}
                       className={`relative aspect-square rounded-lg text-xs font-mono font-black transition-all ${
-                        locked ? 'bg-muted text-muted-foreground/40 border border-border cursor-not-allowed' :
                         i === idx ? 'bg-primary text-primary-foreground scale-110 shadow-lg z-10' :
                         answered ? (isPBQ ? 'bg-accent/15 text-accent border-2 border-accent/40' : 'bg-primary/10 text-primary border-2 border-primary/20') :
                         isPBQ ? 'bg-card text-foreground border-2 border-accent/40 hover:border-accent' :
                         'bg-card text-muted-foreground border border-border hover:border-primary/50'
                       }`}
                     >
-                      {locked ? <Lock className="h-3 w-3 mx-auto" /> : i + 1}
-                      {isPBQ && !locked && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
-                      {flagged && !locked && <div className="absolute -top-1 -right-1 w-3 h-3 bg-warning rounded-full border-2 border-card" />}
+                      {i + 1}
+                      {isPBQ && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
+                      {flagged && <div className="absolute -top-1 -right-1 w-3 h-3 bg-warning rounded-full border-2 border-card" />}
                     </button>
                   );
                 })}
@@ -469,13 +404,24 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
 
           <div className="bg-card rounded-3xl border border-border shadow-sm min-h-[500px] flex flex-col">
             <div className="p-6 sm:p-10 flex-1">
-              <div className="flex items-center justify-between mb-8">
-                <span className="px-3 py-1 rounded-full bg-muted text-[10px] font-bold text-muted-foreground tracking-tight uppercase">
-                  {DOMAIN_LABELS[cur.kind === 'pbq' ? cur.data.domain : cur.data.domain]}
-                </span>
+              <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase tracking-tight text-muted-foreground">
+                    {DOMAIN_LABELS[cur.data.domain]}
+                  </span>
+                  <span
+                    className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-bold text-primary"
+                    title={objectiveLabel(cur.data.objective)}
+                  >
+                    Objective {cur.data.objective || '—'}
+                  </span>
+                  <span className="rounded-full border border-border bg-background/50 px-3 py-1 text-[10px] font-bold uppercase tracking-tight text-muted-foreground">
+                    Difficulty {cur.data.difficulty}/3
+                  </span>
+                </div>
                 <button 
                   onClick={toggleFlag} 
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                  className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold transition-all ${
                     flags.has(qId) ? 'bg-accent/10 border-accent text-accent' : 'bg-muted border-transparent text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
@@ -502,6 +448,91 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
               </div>
             )}
           </div>
+          </div>
+
+          <aside className="hidden lg:block">
+            <div className="sticky top-24 space-y-4">
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <div className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Exam controls</div>
+                {!isStudyMode ? (
+                  <div className={`mb-4 flex items-center justify-between rounded-xl border px-3 py-3 ${
+                    isWarning10 ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border bg-muted/30'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Time left</span>
+                    </div>
+                    <span className="font-mono text-lg font-black">{timerDisplay}</span>
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-xl border border-border bg-muted/30 px-3 py-3 text-xs font-bold text-muted-foreground">
+                    Untimed study session
+                  </div>
+                )}
+
+                <div className="mb-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-muted/30 p-3">
+                    <div className="font-mono text-xl font-black">{answeredCount}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Answered</div>
+                  </div>
+                  <div className="rounded-xl bg-muted/30 p-3">
+                    <div className="font-mono text-xl font-black">{flags.size}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Flagged</div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={toggleFlag}
+                  className={`mb-4 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-black ${
+                    flags.has(qId) ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-background/50 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Flag className={`h-3.5 w-3.5 ${flags.has(qId) ? 'fill-current' : ''}`} />
+                  {flags.has(qId) ? 'Remove flag' : 'Flag question'}
+                </button>
+
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Question palette</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">{idx + 1}/{questions.length}</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {questions.map((q, i) => {
+                    const id = q.data.id;
+                    const answered = q.kind === 'pbq'
+                      ? Boolean(pbqAnswers[id] && (Array.isArray(pbqAnswers[id]) ? pbqAnswers[id].some((a: any) => a !== '') : typeof pbqAnswers[id] === 'object' && Object.keys(pbqAnswers[id]).length > 0))
+                      : mcqAnswers[id] !== undefined;
+                    const flagged = flags.has(id);
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => goTo(i)}
+                        title={q.kind === 'pbq' ? `Q${i + 1} — PBQ` : `Q${i + 1}`}
+                        className={`relative aspect-square rounded-md border text-[10px] font-mono font-black transition-all hover:scale-105 ${
+                          i === idx
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : answered
+                              ? 'border-primary/30 bg-primary/10 text-primary'
+                              : q.kind === 'pbq'
+                                ? 'border-accent/40 bg-accent/5 text-accent'
+                                : 'border-border bg-background/50 text-muted-foreground'
+                        }`}
+                      >
+                        {i + 1}
+                        {flagged && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-warning ring-2 ring-card" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2 text-[9px] font-semibold text-muted-foreground">
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-primary" /> Current</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm border border-primary/40 bg-primary/10" /> Answered</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm border border-accent/50 bg-accent/10" /> PBQ</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> Flagged</span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
 

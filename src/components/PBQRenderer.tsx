@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { CheckCircle2, XCircle, GripVertical, ListChecks } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, XCircle, GripVertical, ListChecks, MousePointer2 } from 'lucide-react';
 import type { PBQuestion, PBQFirewall, PBQOrdering, PBQLogAnalysis, PBQMatching, PBQPlacement } from '@/data/questions';
+import { objectiveLabel } from '@/lib/sy0701Objectives';
 
 /**
  * Shared Performance-Based Question renderer.
@@ -10,24 +11,66 @@ import type { PBQuestion, PBQFirewall, PBQOrdering, PBQLogAnalysis, PBQMatching,
  * (ExamResults -> PBQRenderer, in read-only/`show` mode) without creating a
  * circular import between those two components.
  */
-export function PBQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: PBQuestion; ans: any; onAns: (a: any) => void; submitted: boolean; studyRevealed: boolean }) {
+export function PBQRenderer({
+  q,
+  ans,
+  onAns,
+  submitted,
+  studyRevealed,
+  compact = false,
+}: {
+  q: PBQuestion;
+  ans: any;
+  onAns: (a: any) => void;
+  submitted: boolean;
+  studyRevealed: boolean;
+  compact?: boolean;
+}) {
   const showFeedback = submitted || studyRevealed;
+  const typeLabel = {
+    firewall: 'Firewall policy',
+    ordering: 'Sequence / workflow',
+    'log-analysis': 'SIEM / log analysis',
+    matching: 'Matching',
+    placement: 'Topology placement',
+  }[q.type];
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <h3 className="text-xl font-bold mb-2">{q.title}</h3>
-      <p className="text-muted-foreground text-sm mb-8 leading-relaxed italic">{q.scenario}</p>
+      <div className={compact ? 'space-y-4' : 'grid gap-5 lg:grid-cols-[minmax(240px,0.72fr)_minmax(0,1.55fr)]'}>
+        <aside className={`rounded-2xl border border-border bg-muted/20 ${compact ? 'p-4' : 'p-5 lg:sticky lg:top-24 lg:self-start'}`}>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <span className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-accent">
+              {typeLabel}
+            </span>
+            <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+              Difficulty {q.difficulty}/3
+            </span>
+          </div>
+          <h3 className={`font-bold leading-snug ${compact ? 'text-base' : 'text-xl'}`}>{q.title}</h3>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{q.scenario}</p>
+          <div className="mt-5 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">
+            <div className="font-mono font-bold text-foreground">Objective {q.objective || '—'}</div>
+            <div>{objectiveLabel(q.objective)}</div>
+          </div>
+        </aside>
 
-      <div className="p-1">
-        {q.type === 'firewall' && <FirewallPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
-        {q.type === 'ordering' && <OrderingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
-        {q.type === 'log-analysis' && <LogAnalysisPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
-        {q.type === 'matching' && <MatchingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
-        {q.type === 'placement' && <PlacementPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+        <section className={`min-w-0 rounded-2xl border border-border bg-background/30 ${compact ? 'p-3' : 'p-4 sm:p-5'}`}>
+          <div className="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">
+            <MousePointer2 className="h-3.5 w-3.5" />
+            Interactive workspace
+          </div>
+          {q.type === 'firewall' && <FirewallPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'ordering' && <OrderingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'log-analysis' && <LogAnalysisPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'matching' && <MatchingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+          {q.type === 'placement' && <PlacementPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+        </section>
       </div>
 
-      {showFeedback && (
-        <div className="mt-10 p-6 rounded-2xl bg-muted/30 border border-border animate-in zoom-in-95 duration-500">
-          <div className="flex items-center gap-2 mb-3 text-primary uppercase tracking-widest font-black text-[10px]">
+      {showFeedback && !compact && (
+        <div className="mt-6 rounded-2xl border border-border bg-muted/30 p-6 animate-in zoom-in-95 duration-500">
+          <div className="mb-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
             <ListChecks className="h-4 w-4" />
             Explanation
           </div>
@@ -108,21 +151,26 @@ function OrderingPBQ({ q, ans, onAns, show }: { q: PBQOrdering; ans: string[]; o
     setTimeout(() => onAns(currentOrder), 0);
   }
 
+  const move = (from: number, to: number) => {
+    if (show || to < 0 || to >= currentOrder.length) return;
+    const next = [...currentOrder];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onAns(next);
+  };
+
   const handleDrop = (targetIdx: number) => {
     if (dragIdx === null || show) return;
-    const next = [...currentOrder];
-    const [moved] = next.splice(dragIdx, 1);
-    next.splice(targetIdx, 0, moved);
-    onAns(next);
+    move(dragIdx, targetIdx);
     setDragIdx(null);
-        setDropTargetIdx(null);
+    setDropTargetIdx(null);
   };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-4">
         <GripVertical className="h-4 w-4 text-muted-foreground" />
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Drag to reorder steps</span>
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Drag to reorder, or use the arrow controls</span>
       </div>
       {currentOrder.map((step, i) => {
         const ci = q.steps.find(s => s.label === step);
@@ -152,7 +200,29 @@ function OrderingPBQ({ q, ans, onAns, show }: { q: PBQOrdering; ans: string[]; o
               {i+1}
             </div>
             <span className="flex-1 font-medium">{step}</span>
-            <GripVertical className="h-4 w-4 text-muted-foreground opacity-30" />
+            {!show && (
+              <div className="flex shrink-0 gap-1">
+                <button
+                  type="button"
+                  onClick={() => move(i, i - 1)}
+                  disabled={i === 0}
+                  aria-label={`Move ${step} up`}
+                  className="rounded-md border border-border p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(i, i + 1)}
+                  disabled={i === currentOrder.length - 1}
+                  aria-label={`Move ${step} down`}
+                  className="rounded-md border border-border p-2 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+            <GripVertical className="hidden h-4 w-4 text-muted-foreground opacity-30 sm:block" />
             {ok && <CheckCircle2 className="h-4 w-4 text-success" />}
             {bad && ci && <div className="text-right flex flex-col">
               <XCircle className="h-4 w-4 text-destructive ml-auto" />
@@ -276,7 +346,7 @@ function MatchingPBQ({ q, ans, onAns, show }: { q: PBQMatching; ans: Record<stri
       <div>
         <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
           <GripVertical className="h-3 w-3" />
-          Available Items
+          Available Items — drag, or tap an item then tap a destination
         </h4>
         <div className="flex flex-wrap gap-3 p-6 rounded-2xl bg-muted/30 border-2 border-dashed border-border min-h-[80px]">
           {unassigned.map(it => (
@@ -285,9 +355,12 @@ function MatchingPBQ({ q, ans, onAns, show }: { q: PBQMatching; ans: Record<stri
               draggable={!show}
               onDragStart={e => { setDragItem(it.left); e.dataTransfer.setData('text/plain', it.left); e.dataTransfer.effectAllowed = 'move'; }}
               onDragEnd={() => setDragItem(null)}
-              className={`px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-foreground shadow-sm transition-all ${
+              onClick={() => !show && setDragItem(dragItem === it.left ? null : it.left)}
+              role={!show ? 'button' : undefined}
+              tabIndex={!show ? 0 : undefined}
+              className={`px-4 py-2 rounded-xl border bg-card text-xs font-bold text-foreground shadow-sm transition-all ${
                 !show ? 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-md' : ''
-              } ${dragItem === it.left ? 'opacity-50 scale-95' : ''}`}
+              } ${dragItem === it.left ? 'border-accent ring-2 ring-accent/20' : 'border-border'}`}
             >
               {it.left}
             </div>
@@ -305,7 +378,8 @@ function MatchingPBQ({ q, ans, onAns, show }: { q: PBQMatching; ans: Record<stri
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('bg-primary/5', 'border-primary/50'); }}
               onDragLeave={e => { e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); }}
               onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); handleDrop(right); }}
-              className="group border-2 border-border rounded-2xl p-5 min-h-[120px] transition-all bg-card hover:shadow-lg"
+              onClick={() => { if (dragItem && !show) handleDrop(right); }}
+              className={`group rounded-2xl border-2 p-5 min-h-[120px] transition-all bg-card hover:shadow-lg ${dragItem && !show ? 'border-accent/50 cursor-pointer' : 'border-border'}`}
             >
               <h5 className="text-xs font-black uppercase tracking-widest text-primary mb-4 border-b border-primary/10 pb-2">{right}</h5>
               <div className="space-y-2">
@@ -359,7 +433,7 @@ function PlacementPBQ({ q, ans, onAns, show }: { q: PBQPlacement; ans: Record<st
       <div>
         <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
           <GripVertical className="h-3 w-3" />
-          Components to Place
+          Components to Place — drag, or tap a component then tap a zone
         </h4>
         <div className="flex flex-wrap gap-2 p-6 rounded-2xl bg-muted/30 border-2 border-dashed border-border min-h-[80px]">
           {unassigned.map(it => (
@@ -368,9 +442,12 @@ function PlacementPBQ({ q, ans, onAns, show }: { q: PBQPlacement; ans: Record<st
               draggable={!show}
               onDragStart={e => { setDragItem(it.label); e.dataTransfer.setData('text/plain', it.label); e.dataTransfer.effectAllowed = 'move'; }}
               onDragEnd={() => setDragItem(null)}
-              className={`px-3 py-1.5 rounded-lg border border-border bg-card text-[10px] font-black text-foreground shadow-sm transition-all ${
+              onClick={() => !show && setDragItem(dragItem === it.label ? null : it.label)}
+              role={!show ? 'button' : undefined}
+              tabIndex={!show ? 0 : undefined}
+              className={`px-3 py-2 rounded-lg border bg-card text-[10px] font-black text-foreground shadow-sm transition-all ${
                 !show ? 'cursor-grab active:cursor-grabbing hover:border-primary/50' : ''
-              } ${dragItem === it.label ? 'opacity-50 scale-95' : ''}`}
+              } ${dragItem === it.label ? 'border-accent ring-2 ring-accent/20' : 'border-border'}`}
             >
               {it.label}
             </div>
@@ -387,7 +464,8 @@ function PlacementPBQ({ q, ans, onAns, show }: { q: PBQPlacement; ans: Record<st
               onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('bg-primary/5', 'border-primary/50'); }}
               onDragLeave={e => { e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); }}
               onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); handleDrop(zone); }}
-              className="border-2 border-border border-dashed rounded-2xl p-5 min-h-[140px] transition-all bg-card/50 flex flex-col"
+              onClick={() => { if (dragItem && !show) handleDrop(zone); }}
+              className={`flex min-h-[140px] flex-col rounded-2xl border-2 border-dashed p-5 transition-all bg-card/50 ${dragItem && !show ? 'border-accent/50 cursor-pointer' : 'border-border'}`}
             >
               <h5 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2 text-center">{zone}</h5>
               <div className="flex-1 flex flex-col gap-2">
