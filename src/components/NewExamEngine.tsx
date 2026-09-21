@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, AlertTriangle, Clock, Timer, Pause, Play, Shuffle, LogOut, Lock } from 'lucide-react';
+import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, AlertTriangle, Clock, Pause, Play, Shuffle, LogOut } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { isMCQCorrect, isPBQCorrect, calculateScore, type ScoreResult } from '@/lib/examEngine';
@@ -11,30 +11,15 @@ import { DOMAIN_LABELS } from '@/data/questions';
 type UnifiedQ = { kind: 'pbq'; data: PBQuestion } | { kind: 'mcq'; data: MCQuestion };
 
 /**
- * Spread PBQs evenly across the MCQs instead of clustering them all at the
- * front of the exam. Both inputs are assumed to already be independently
- * shuffled; this only controls the interleaving positions.
+ * Keep PBQs at the front, then MCQs. This more closely resembles commonly
+ * reported Pearson VUE / CompTIA delivery while preserving normal flagging and
+ * review navigation throughout the attempt.
  */
-function interleavePbqs(pbqs: PBQuestion[], mcqs: MCQuestion[]): UnifiedQ[] {
-  if (pbqs.length === 0) return mcqs.map(q => ({ kind: 'mcq' as const, data: q }));
-  if (mcqs.length === 0) return pbqs.map(q => ({ kind: 'pbq' as const, data: q }));
-
-  const result: UnifiedQ[] = [];
-  const gap = mcqs.length / (pbqs.length + 1); // MCQs consumed between each PBQ
-  let pbqIdx = 0;
-  let mcqIdx = 0;
-  let nextPbqAt = gap;
-
-  while (pbqIdx < pbqs.length || mcqIdx < mcqs.length) {
-    const dueForPbq = pbqIdx < pbqs.length && (mcqIdx >= nextPbqAt || mcqIdx >= mcqs.length);
-    if (dueForPbq) {
-      result.push({ kind: 'pbq', data: pbqs[pbqIdx++] });
-      nextPbqAt += gap;
-    } else {
-      result.push({ kind: 'mcq', data: mcqs[mcqIdx++] });
-    }
-  }
-  return result;
+function arrangeQuestions(pbqs: PBQuestion[], mcqs: MCQuestion[]): UnifiedQ[] {
+  return [
+    ...pbqs.map(data => ({ kind: 'pbq' as const, data })),
+    ...mcqs.map(data => ({ kind: 'mcq' as const, data })),
+  ];
 }
 
 interface NewExamEngineProps {
@@ -50,15 +35,12 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   // Bumped by the Shuffle button to re-randomize question order + MCQ option order.
   const [shuffleNonce, setShuffleNonce] = useState(0);
 
-  // PBQs are spread evenly across the exam (not clustered at the start) so the
-  // performance-based questions don't all land back-to-back. Each individual
-  // PBQ still locks once you move on from it — you just can't jump back to a
-  // PBQ you've already passed — which mirrors the real CompTIA "no return to
-  // PBQs" rule at per-question granularity instead of one big front section.
+  // Shuffle within question families, then present PBQs first. PBQs remain
+  // reviewable and flaggable like other exam items.
   const questions = useMemo<UnifiedQ[]>(() => {
     const shuffledMcqs = [...mcqs].sort(() => Math.random() - 0.5);
     const shuffledPbqs = [...pbqs].sort(() => Math.random() - 0.5);
-    return interleavePbqs(shuffledPbqs, shuffledMcqs);
+    return arrangeQuestions(shuffledPbqs, shuffledMcqs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pbqs, mcqs, shuffleNonce]);
 
@@ -71,9 +53,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const [submitted, setSubmitted] = useState(false);
   const [showNav, setShowNav] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
-  const [showPbqLock, setShowPbqLock] = useState(false);
-  // Which PBQs (by id) have already been left and can no longer be revisited.
-  const [lockedPbqIds, setLockedPbqIds] = useState<Set<string>>(new Set());
   const [warned30, setWarned30] = useState(false);
   const [warned10, setWarned10] = useState(false);
   const [warningBanner, setWarningBanner] = useState<null | '30' | '10'>(null);
@@ -91,9 +70,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
 
   const cur = questions[idx];
   const qId = cur.kind === 'pbq' ? cur.data.id : cur.data.id;
-  // PBQs are interleaved throughout `questions` — there's no contiguous
-  // "PBQ section" anymore, so the lock is tracked per-question (lockedPbqIds)
-  // instead of by array position.
 
   // Timer logic with Pause
   useEffect(() => {
@@ -230,30 +206,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     if (isPaused) return;
     if (newIdx < 0 || newIdx >= questions.length) return;
     if (newIdx === idx) return;
-
-    const target = questions[newIdx];
-    // Per-question PBQ lock: once you leave a PBQ, you cannot come back to it
-    // (mirrors the real CompTIA "no return to PBQs" rule, applied per-question
-    // now that PBQs are spread throughout the exam instead of one front section).
-    if (!isStudyMode && target.kind === 'pbq' && lockedPbqIds.has(target.data.id)) {
-      return; // hard block — this PBQ was already left and is locked
-    }
-    const leavingUnlockedPbq = !isStudyMode && cur.kind === 'pbq' && !lockedPbqIds.has(cur.data.id);
-    if (leavingUnlockedPbq) {
-      setShowPbqLock(true);
-      (window as any).__pendingIdx = newIdx;
-      return;
-    }
     setIdx(newIdx);
-  };
-
-  const confirmLeavePbqs = () => {
-    if (cur.kind === 'pbq') {
-      setLockedPbqIds(prev => new Set(prev).add(cur.data.id));
-    }
-    setShowPbqLock(false);
-    const pending = (window as any).__pendingIdx;
-    if (typeof pending === 'number') setIdx(pending);
   };
 
   const handleShuffle = () => {
@@ -265,7 +218,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     setPbqAnswers({});
     setMcqAnswers({});
     setFlags(new Set());
-    setLockedPbqIds(new Set());
     setQuestionTimes({});
     setQStartTime(Date.now());
   };
@@ -280,7 +232,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   };
 
   if (submitted && scoreResult && !isStudyMode) {
-    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
+    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
   }
 
   const timerMins = Math.floor(remaining / 60);
@@ -325,22 +277,6 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 rounded-md border border-border text-sm">Continue Exam</button>
             <button onClick={handleSubmit} className="px-4 py-2 rounded-md bg-accent text-accent-foreground font-bold text-sm">Submit</button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Per-PBQ lock confirmation */}
-      <Dialog open={showPbqLock} onOpenChange={setShowPbqLock}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-warning" /> Leave this Performance-Based Question?</DialogTitle>
-            <DialogDescription>
-              Once you move on, you will <strong>not be able to return</strong> to this PBQ. This mirrors the real CompTIA exam.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => setShowPbqLock(false)} className="px-4 py-2 rounded-md border border-border text-sm">Stay on this PBQ</button>
-            <button onClick={confirmLeavePbqs} className="px-4 py-2 rounded-md bg-warning text-warning-foreground font-bold text-sm">Continue</button>
           </div>
         </DialogContent>
       </Dialog>
@@ -441,25 +377,22 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
                     : mcqAnswers[id] !== undefined;
                   const flagged = flags.has(id);
                   const isPBQ = q.kind === 'pbq';
-                  const locked = isPBQ && lockedPbqIds.has(id);
 
                   return (
                     <button
                       key={i}
                       onClick={() => goTo(i)}
-                      disabled={locked}
-                      title={locked ? `Q${i + 1} — Performance-Based (locked)` : isPBQ ? `Q${i + 1} — Performance-Based` : `Q${i + 1}`}
+                      title={isPBQ ? `Q${i + 1} — Performance-Based` : `Q${i + 1}`}
                       className={`relative aspect-square rounded-lg text-xs font-mono font-black transition-all ${
-                        locked ? 'bg-muted text-muted-foreground/40 border border-border cursor-not-allowed' :
                         i === idx ? 'bg-primary text-primary-foreground scale-110 shadow-lg z-10' :
                         answered ? (isPBQ ? 'bg-accent/15 text-accent border-2 border-accent/40' : 'bg-primary/10 text-primary border-2 border-primary/20') :
                         isPBQ ? 'bg-card text-foreground border-2 border-accent/40 hover:border-accent' :
                         'bg-card text-muted-foreground border border-border hover:border-primary/50'
                       }`}
                     >
-                      {locked ? <Lock className="h-3 w-3 mx-auto" /> : i + 1}
-                      {isPBQ && !locked && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
-                      {flagged && !locked && <div className="absolute -top-1 -right-1 w-3 h-3 bg-warning rounded-full border-2 border-card" />}
+                      {i + 1}
+                      {isPBQ && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-accent" />}
+                      {flagged && <div className="absolute -top-1 -right-1 w-3 h-3 bg-warning rounded-full border-2 border-card" />}
                     </button>
                   );
                 })}
