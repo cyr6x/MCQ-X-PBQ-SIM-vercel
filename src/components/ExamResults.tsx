@@ -21,6 +21,7 @@ import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
 import { PBQRenderer } from '@/components/PBQRenderer';
+import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 
 interface ExamResultsProps {
   score: ScoreResult;
@@ -106,6 +107,16 @@ function pbqModelAnswer(q: PBQuestion): any {
       return Object.fromEntries(q.items.map(item => [item.left, item.correctRight]));
     case 'placement':
       return Object.fromEntries(q.items.map(item => [item.label, item.correctZone]));
+    case 'terminal':
+      return q.tasks.map(task => task.correctIndex);
+    case 'packet-analysis':
+      return {
+        packetIds: [...q.suspiciousPacketIds],
+        attackType: q.correctAttackType,
+        response: q.correctResponse,
+      };
+    case 'topology':
+      return Object.fromEntries(q.nodes.map(node => [node.id, node.correctZone]));
   }
 }
 
@@ -427,6 +438,7 @@ function MCQReview({ item }: { item: Extract<ReviewItem, { type: 'mcq' }> }) {
 
   return (
     <div className="space-y-5">
+      <EvidenceBlocks evidence={q.evidence} defaultOpen />
       <div className="grid gap-3">
         {q.options.map((option, index) => {
           const isSelected = selected(index);
@@ -526,6 +538,7 @@ function RetestMCQ({ q }: { q: MCQuestion }) {
         </div>
         <button onClick={() => { setOpen(false); reset(); }} className="text-[10px] font-bold text-muted-foreground hover:text-foreground">Close</button>
       </div>
+      <EvidenceBlocks evidence={q.evidence} />
       <div className="grid gap-2">
         {q.options.map((option, index) => (
           <button
