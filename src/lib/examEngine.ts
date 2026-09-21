@@ -15,6 +15,12 @@ export interface ExamState {
   questionTimes: Record<string, number>;
 }
 
+export interface PBQCredit {
+  earned: number;
+  total: number;
+  ratio: number;
+}
+
 export function createExamState(): ExamState {
   return {
     mcqAnswers: {},
@@ -35,24 +41,62 @@ export function isMCQCorrect(q: MCQuestion, ans: number | number[] | undefined):
   return JSON.stringify(sel) === JSON.stringify(cor);
 }
 
-export function isPBQCorrect(q: PBQuestion, ans: any): boolean {
-  if (!ans) return false;
+/**
+ * Practice-simulator PBQ credit.
+ *
+ * CompTIA does not publish the weighting of individual PBQ subtasks, so the
+ * simulator treats each explicit subtask as equally weighted. This gives useful
+ * partial-credit feedback without claiming to reproduce CompTIA's confidential
+ * scoring model.
+ */
+export function getPBQCredit(q: PBQuestion, ans: any): PBQCredit {
+  if (!ans) {
+    const total =
+      q.type === 'firewall' ? q.correctActions.length :
+      q.type === 'ordering' ? q.steps.length :
+      q.type === 'log-analysis' ? 3 :
+      q.type === 'matching' ? q.items.length :
+      q.items.length;
+    return { earned: 0, total: Math.max(1, total), ratio: 0 };
+  }
+
+  let earned = 0;
+  let total = 1;
+
   switch (q.type) {
     case 'firewall':
-      return q.correctActions.every((a, i) => (ans as string[])?.[i] === a);
+      total = q.correctActions.length;
+      earned = q.correctActions.reduce((sum, action, i) => sum + ((ans as string[])?.[i] === action ? 1 : 0), 0);
+      break;
     case 'ordering':
-      return q.steps.every(s => (ans as string[])?.[s.correctPosition] === s.label);
+      total = q.steps.length;
+      earned = q.steps.reduce((sum, step) => sum + ((ans as string[])?.[step.correctPosition] === step.label ? 1 : 0), 0);
+      break;
     case 'log-analysis': {
+      total = 3;
       const a = ans as { attackType?: string; sourceIP?: string; response?: number };
-      return a.attackType === q.correctAttackType && a.sourceIP === q.correctSourceIP && a.response === q.correctResponse;
+      earned =
+        (a.attackType === q.correctAttackType ? 1 : 0) +
+        (a.sourceIP === q.correctSourceIP ? 1 : 0) +
+        (a.response === q.correctResponse ? 1 : 0);
+      break;
     }
     case 'matching':
-      return q.items.every(it => ans?.[it.left] === it.correctRight);
+      total = q.items.length;
+      earned = q.items.reduce((sum, item) => sum + (ans?.[item.left] === item.correctRight ? 1 : 0), 0);
+      break;
     case 'placement':
-      return q.items.every(it => ans?.[it.label] === it.correctZone);
-    default:
-      return false;
+      total = q.items.length;
+      earned = q.items.reduce((sum, item) => sum + (ans?.[item.label] === item.correctZone ? 1 : 0), 0);
+      break;
   }
+
+  const safeTotal = Math.max(1, total);
+  return { earned, total: safeTotal, ratio: earned / safeTotal };
+}
+
+export function isPBQCorrect(q: PBQuestion, ans: any): boolean {
+  return getPBQCredit(q, ans).ratio === 1;
 }
 
 export interface ScoreResult {
@@ -75,22 +119,20 @@ export function calculateScore(
   const rawTotal = pbqs.length + mcqs.length;
   const domainScores: Record<string, { correct: number; total: number; percentage: number }> = {};
 
-  // Initialize all domains
   Object.values(DOMAIN_LABELS).forEach(label => {
     domainScores[label] = { correct: 0, total: 0, percentage: 0 };
   });
 
-  // Score PBQs
+  // PBQs earn practice partial credit by explicit subtask. This is pedagogical
+  // scoring, not a claim about CompTIA's confidential weighting.
   pbqs.forEach(q => {
     const domainLabel = DOMAIN_LABELS[q.domain];
+    const credit = getPBQCredit(q, pbqAnswers[q.id]);
     domainScores[domainLabel].total++;
-    if (isPBQCorrect(q, pbqAnswers[q.id])) {
-      rawCorrect++;
-      domainScores[domainLabel].correct++;
-    }
+    rawCorrect += credit.ratio;
+    domainScores[domainLabel].correct += credit.ratio;
   });
 
-  // Score MCQs
   mcqs.forEach(q => {
     const domainLabel = DOMAIN_LABELS[q.domain];
     domainScores[domainLabel].total++;
@@ -100,12 +142,11 @@ export function calculateScore(
     }
   });
 
-  // Calculate percentages
   Object.values(domainScores).forEach(d => {
     d.percentage = d.total > 0 ? Math.round((d.correct / d.total) * 100) : 0;
   });
 
-  // Scaled score: (raw/total) × 900, rounded to nearest 10
+  // Practice scaled score only. CompTIA's exact scoring formula is not public.
   const scaledScore = Math.round(((rawCorrect / rawTotal) * 900) / 10) * 10;
   const timeUsedMinutes = Math.round((Date.now() - startTime) / 60000);
 
