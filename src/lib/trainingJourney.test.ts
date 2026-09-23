@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildExam,
+  mcqSingle,
+  mcqSelectTwo,
+  pbqBank,
   type MCQuestion,
   type PBQuestion,
 } from '@/data/questions';
@@ -39,6 +42,27 @@ function wrongMCQAnswer(q: MCQuestion): number | number[] {
 }
 
 describe('full training journey whitebox', () => {
+  it('validates every MCQ key and every PBQ model solution in the bank', () => {
+    [...mcqSingle, ...mcqSelectTwo].forEach((q) => {
+      if (q.type === 'single') {
+        expect(q.answer).toBeGreaterThanOrEqual(0);
+        expect(q.answer).toBeLessThan(q.options.length);
+      } else {
+        expect(q.answer).toHaveLength(2);
+        expect(new Set(q.answer).size).toBe(2);
+        q.answer.forEach((index) => {
+          expect(index).toBeGreaterThanOrEqual(0);
+          expect(index).toBeLessThan(q.options.length);
+        });
+      }
+    });
+
+    pbqBank.forEach((q) => {
+      expect(getPBQCredit(q, modelPBQAnswer(q)).ratio).toBe(1);
+    });
+  });
+
+
   it('runs a 90-item mixed form with multiple PBQs, misses, review signals and a strong pass', () => {
     const exam = buildExam(3);
     const ordered = buildStrictExamOrder(exam.pbqs, exam.mcqs, 3);
