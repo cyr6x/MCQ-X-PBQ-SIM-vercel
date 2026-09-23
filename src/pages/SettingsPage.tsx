@@ -67,7 +67,7 @@ export default function SettingsPage() {
                 type="date"
                 value={draft.target_exam_date ?? ''}
                 onChange={(event) => updateField('target_exam_date', event.target.value || null)}
-                className="w-full rounded-lg border border-border bg-muted/55 px-3 py-2.5 text-sm"
+                className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
               />
             </Field>
           </div>
@@ -78,7 +78,7 @@ export default function SettingsPage() {
             <select
               value={draft.default_mode}
               onChange={(event) => updateField('default_mode', event.target.value as UserSettings['default_mode'])}
-              className="w-full rounded-lg border border-border bg-muted/55 px-3 py-2.5 text-sm"
+              className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
             >
               <option value="tutor">Tutor — feedback-first learning</option>
               <option value="sprint">Sprint — configured quick set</option>
@@ -142,7 +142,7 @@ export default function SettingsPage() {
               <select
                 value={draft.font_size}
                 onChange={(event) => updateField('font_size', event.target.value as UserSettings['font_size'])}
-                className="w-full rounded-lg border border-border bg-muted/55 px-3 py-2.5 text-sm"
+                className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
               >
                 <option value="small">Small</option>
                 <option value="normal">Normal</option>
@@ -214,7 +214,7 @@ function NumberInput({ min, max, value, onChange }: { min: number; max: number; 
       max={max}
       value={value}
       onChange={(event) => onChange(Number(event.target.value))}
-      className="w-full rounded-lg border border-border bg-muted/55 px-3 py-2.5 text-sm"
+      className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
     />
   );
 }
