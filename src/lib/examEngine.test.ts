@@ -131,9 +131,14 @@ describe('examEngine', () => {
     expect(r.passed).toBe(true);
   });
 
-  it('fails when below scaled 750', () => {
-    const r = calculateScore([] as PBQuestion[], [single, multi], {}, { m1: 2 }, Date.now());
-    expect(r.scaledScore).toBeLessThan(750);
-    expect(r.passed).toBe(false);
+  it('uses the published 100-900 reporting range for the modeled score', () => {
+    const zero = calculateScore([] as PBQuestion[], [single, multi], {}, {}, Date.now());
+    expect(zero.scaledScore).toBe(100);
+    expect(zero.passed).toBe(false);
+
+    const partial = calculateScore([] as PBQuestion[], [single, multi], {}, { m1: 2 }, Date.now());
+    expect(partial.scaledScore).toBeGreaterThan(100);
+    expect(partial.scaledScore).toBeLessThan(750);
+    expect(partial.passed).toBe(false);
   });
 });
