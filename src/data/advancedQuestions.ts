@@ -204,7 +204,7 @@ export const advancedMCQs: MCQuestion[] = [
       3: 'The command provides no evidence about physical controls.',
     },
     objective: '1.4',
-  },,
+  },
   {
     id: 'adv-mcq-07',
     domain: 'D2',
