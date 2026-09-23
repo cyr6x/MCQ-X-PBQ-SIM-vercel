@@ -171,7 +171,7 @@ export default function StudyPage() {
 
           <button
             onClick={() => navigate('/pbq')}
-            className="flex w-full items-center justify-between rounded-2xl border border-accent/30 bg-accent/8 px-4 py-4 text-left hover:bg-accent/12"
+            className="flex w-full items-center justify-between rounded-2xl border border-accent/30 bg-accent/10 px-4 py-4 text-left hover:bg-accent/20"
           >
             <div>
               <div className="text-sm font-semibold">Go deeper on PBQs</div>
@@ -191,7 +191,7 @@ export default function StudyPage() {
           {requestedMode && MODE_META[requestedMode] && (
             <button
               onClick={() => start(requestedMode)}
-              className="mb-4 flex w-full items-center justify-between rounded-2xl border border-primary/30 bg-primary/8 p-4 text-left hover:bg-primary/12"
+              className="mb-4 flex w-full items-center justify-between rounded-2xl border border-primary/30 bg-primary/10 p-4 text-left hover:bg-primary/20"
             >
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">Requested session</div>
@@ -218,7 +218,7 @@ export default function StudyPage() {
                   key={mode}
                   onClick={() => start(mode)}
                   disabled={disabled}
-                  className="group min-h-40 rounded-2xl border border-border bg-card/85 p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/20 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="group min-h-40 rounded-2xl border border-border bg-card/90 p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/20 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
