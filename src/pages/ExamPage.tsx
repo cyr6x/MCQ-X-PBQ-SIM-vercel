@@ -1,159 +1,159 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Check, Clock, Maximize2, ShieldCheck } from 'lucide-react';
+import { Check, Clock, Maximize2, Pause, Settings2, ShieldCheck, Target } from 'lucide-react';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
 import { buildExam, type ExamNumber } from '@/data/questions';
+import { useSettings } from '@/lib/SettingsContext';
 
 const FORMS: ExamNumber[] = [1, 2, 3, 4, 5];
 
 export default function ExamPage() {
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const [selected, setSelected] = useState<ExamNumber>(1);
   const [examData, setExamData] = useState<ReturnType<typeof buildExam> | null>(null);
 
   const startExam = async () => {
-    try {
-      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
+    if (settings.exam_auto_fullscreen) {
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch {
+        // Fullscreen is optional training ergonomics, never a scoring dependency.
       }
-    } catch {
-      // Fullscreen is a browser capability, not a scoring dependency.
     }
     setExamData(buildExam(selected));
   };
 
   if (examData) {
     return (
-      <StrictExamEngine
-        pbqs={examData.pbqs}
-        mcqs={examData.mcqs}
-        examNumber={examData.examNumber}
-        durationMinutes={90}
-        onFinish={() => {
-          setExamData(null);
-          navigate('/');
-        }}
-      />
+      <div className="fixed inset-0 z-[80] overflow-auto bg-background">
+        <StrictExamEngine
+          pbqs={examData.pbqs}
+          mcqs={examData.mcqs}
+          examNumber={examData.examNumber}
+          durationMinutes={90}
+          onFinish={() => {
+            setExamData(null);
+            navigate('/');
+          }}
+        />
+      </div>
     );
   }
 
   return (
-    <div className="dark min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-300 bg-slate-900 text-white dark:border-slate-700">
-        <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-8">
-          <ShieldCheck className="mr-2 h-4 w-4 text-sky-300" />
-          <span className="text-sm font-semibold">Security+ SY0-701 Exam Simulation</span>
-          <button onClick={() => navigate('/')} className="ml-auto text-xs text-slate-400 hover:text-white">Exit setup</button>
+    <div className="container mx-auto max-w-6xl px-4 py-6">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+            <ShieldCheck className="h-4 w-4" />
+            Full exam simulation
+          </div>
+          <h1 className="text-2xl font-bold">Security+ SY0-701 Mock Exam</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            90 questions in 90 minutes with randomized MCQs and PBQs, no answer feedback during the attempt, flag/review controls, and detailed remediation after submission.
+          </p>
         </div>
-      </header>
+        <button
+          onClick={() => navigate('/settings')}
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Settings2 className="h-4 w-4" />
+          Training settings
+        </button>
+      </div>
 
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          <section>
-            <div className="mb-6">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                Full-length maximum-load simulation
-              </div>
-              <h1 className="text-3xl font-semibold tracking-tight">Sit it like the real exam.</h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
-                90 items, 90 minutes, multiple-choice and performance-based work, no pause, no answer feedback, and a dedicated final review screen.
-              </p>
-            </div>
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Metric icon={<Target className="h-4 w-4" />} label="Questions" value="90" note="full form" />
+        <Metric icon={<Clock className="h-4 w-4" />} label="Time" value="90:00" note="countdown" />
+        <Metric icon={<Pause className="h-4 w-4" />} label="Pause" value={settings.exam_pause_enabled ? 'On' : 'Off'} note="interruption control" />
+        <Metric icon={<Maximize2 className="h-4 w-4" />} label="Fullscreen" value={settings.exam_auto_fullscreen ? 'Auto' : 'Manual'} note="your preference" />
+      </div>
 
-            <div className="mb-6 grid grid-cols-3 gap-3">
-              <Stat label="Questions" value="90" sub="maximum-load form" />
-              <Stat label="Time" value="90:00" sub="hard countdown" />
-              <Stat label="Benchmark" value="750" sub="practice scale / 900" />
-            </div>
-
-            <div className="rounded-sm border border-slate-300 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-              <h2 className="mb-4 text-sm font-semibold">Select an exam form</h2>
-              <div className="grid grid-cols-5 gap-2">
-                {FORMS.map(form => (
-                  <button
-                    key={form}
-                    onClick={() => setSelected(form)}
-                    className={`rounded-sm border px-3 py-3 text-sm font-semibold ${
-                      selected === form
-                        ? 'border-sky-700 bg-sky-700 text-white'
-                        : 'border-slate-300 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    Form {form}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-3 text-xs leading-5 text-slate-500">
-                Each form is domain-weighted. PBQ count and interaction mix vary so you do not train against a fixed six-PBQ pattern.
-              </p>
-            </div>
-
-            <div className="mt-6 rounded-sm border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
-              <div className="border-b border-slate-200 px-5 py-3 text-sm font-semibold dark:border-slate-800">Exam-condition rules</div>
-              <div className="divide-y divide-slate-200 dark:divide-slate-800">
-                {[
-                  'The 90-minute timer cannot be paused and continues if the tab loses focus.',
-                  'No domain, objective, difficulty, correctness, explanation, analytics, or study hints appear during the attempt.',
-                  'Use Flag for Review and the Item Review screen to revisit questions before ending the exam.',
-                  'Unanswered items remain incomplete and receive no practice credit.',
-                  'Ending review is final. Results and explanations appear only after submission.',
-                ].map(rule => (
-                  <div key={rule} className="flex gap-3 px-5 py-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    <Check className="mt-1 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
-                    <span>{rule}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-start gap-3 rounded-sm border border-amber-300 bg-amber-50 p-4 text-xs leading-5 text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                CompTIA publishes a maximum of 90 questions and a 90-minute limit, but not a fixed PBQ count or proprietary scoring formula. This simulator uses the maximum question load and a modeled practice score.
-              </span>
-            </div>
-          </section>
-
-          <aside>
-            <div className="sticky top-6 rounded-sm border border-slate-300 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-              <h2 className="text-base font-semibold">Ready to begin?</h2>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                Starting requests browser fullscreen when supported and immediately starts the clock.
-              </p>
-
-              <div className="my-5 space-y-3 border-y border-slate-200 py-4 text-sm dark:border-slate-800">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Form</span><strong>{selected}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Timer</span><strong className="font-mono">90:00</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Pause</span><strong>Disabled</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Feedback</span><strong>After submission</strong></div>
-              </div>
-
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold">Choose a form</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            All forms follow the same domain weighting. PBQs are distributed across the exam rather than taught as a fixed block.
+          </p>
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {FORMS.map(form => (
               <button
-                onClick={startExam}
-                className="flex w-full items-center justify-center gap-2 rounded-sm bg-sky-700 px-5 py-3 text-sm font-semibold text-white hover:bg-sky-800"
+                key={form}
+                onClick={() => setSelected(form)}
+                className={`rounded-lg border px-3 py-3 text-sm font-semibold transition-all ${
+                  selected === form
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                }`}
               >
-                <Maximize2 className="h-4 w-4" />
-                Start Exam
+                {form}
               </button>
+            ))}
+          </div>
 
-              <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
-                <Clock className="h-3.5 w-3.5" />
-                Timer starts immediately
+          <div className="mt-5 grid gap-2">
+            {[
+              'Domain, objective and difficulty metadata stay hidden until results.',
+              'PBQs and MCQs are mixed through the form to avoid training a fixed placement pattern.',
+              settings.exam_pause_enabled
+                ? 'Pause covers the active question and stops both timers until you resume.'
+                : 'Pause is disabled in Settings; the clock runs continuously.',
+              'Your final review supports all, incomplete and flagged questions before submission.',
+            ].map(item => (
+              <div key={item} className="flex gap-3 rounded-lg bg-muted/25 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                <span>{item}</span>
               </div>
-            </div>
-          </aside>
-        </div>
-      </main>
+            ))}
+          </div>
+        </section>
+
+        <aside className="rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-16 lg:self-start">
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Ready</div>
+          <div className="mt-1 text-xl font-bold">Form {selected}</div>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Treat this as your exam rehearsal. Use pause only for genuine interruptions; otherwise keep the clock honest.
+          </p>
+
+          <div className="my-5 space-y-2 border-y border-border py-4 text-xs">
+            <Row label="Pause" value={settings.exam_pause_enabled ? 'Available' : 'Disabled'} />
+            <Row label="Fullscreen" value={settings.exam_auto_fullscreen ? 'Auto-start' : 'Off'} />
+            <Row label="Focus notice" value={settings.exam_focus_notice ? 'On' : 'Off'} />
+            <Row label="Timer warning" value={`${Math.round(settings.amber_threshold_seconds / 60)}m / ${Math.round(settings.red_threshold_seconds / 60)}m`} />
+          </div>
+
+          <button
+            onClick={startExam}
+            className="w-full rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+          >
+            Start Exam
+          </button>
+        </aside>
+      </div>
     </div>
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function Metric({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note: string }) {
   return (
-    <div className="rounded-sm border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="mt-1 font-mono text-2xl font-semibold">{value}</div>
-      <div className="mt-1 text-[10px] text-slate-500">{sub}</div>
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {icon}{label}
+      </div>
+      <div className="mt-2 font-mono text-xl font-bold">{value}</div>
+      <div className="mt-1 text-[10px] text-muted-foreground">{note}</div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
