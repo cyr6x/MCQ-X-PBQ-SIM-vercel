@@ -259,7 +259,7 @@ export function ExamResults({
             </div>
             <div className="grid gap-3 md:grid-cols-5">
               {Object.entries(score.domainScores).filter(([, data]) => data.total > 0).map(([domain, data]) => (
-                <div key={domain} className="rounded-xl bg-muted/35 p-3">
+                <div key={domain} className="rounded-xl bg-muted/40 p-3">
                   <div className="mb-2 line-clamp-2 min-h-8 text-[10px] font-semibold leading-4 text-muted-foreground">{domain}</div>
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-lg font-black">{data.percentage}%</span>
