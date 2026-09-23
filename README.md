@@ -1,36 +1,55 @@
-# SY0-701 MCQ x PBQ Simulator
+# SecPlus Trainer — SY0-701
 
-A CompTIA Security+ (SY0-701) practice platform I built while studying for my own exam — scenario-based multiple-choice and performance-based questions, a Pearson VUE-style review screen, and domain-level analytics, instead of another flashcard app.
+A focused CompTIA Security+ (SY0-701) training system built for scenario judgment, applied PBQ practice, remediation and full exam rehearsal rather than recall-only drilling.
 
-## Why
+## Training loop
 
-Most free Security+ question banks are recall-only ("what does X stand for") and don't match how the real exam asks questions — scenario-driven, with PBQs mixed in. I rewrote the question set as scenarios and built the review flow to match the actual exam format, so my practice sessions would actually predict my readiness.
+**Learn → Apply → Repair → Prove**
 
-## What it does
+- **Command Center** — live readiness, training goals, weak-domain signal and next-best-session guidance.
+- **Study** — Tutor, Sprint, Random, Weakest Domain, Mixed MCQ + PBQ and unresolved-miss drills.
+- **PBQ Lab** — eight interactive task families with on-demand feedback and partial-credit training estimates.
+- **Exam Simulation** — 90 questions / 90 minutes, mixed PBQ placement, flag/review flow, optional interruption pause and delayed feedback.
+- **Review** — unresolved and historical MCQ/PBQ misses with individual or bulk retest.
+- **Analytics** — full-exam trend, readiness inputs, domain accuracy vs official weighting and applied-task repetitions.
+- **Settings** — goals, target exam date, quick-start mode, pause/fullscreen/focus controls, timer warnings, drill sizes and accessibility preferences.
 
-- Scenario-based MCQs and PBQs across all five SY0-701 domains
-- Study Mode and Exam Mode (timed, scaled scoring)
-- Full answer-review screen after each attempt, with expand/collapse per question
-- Domain-level analytics (Recharts) to show weak areas over multiple attempts
+## Architecture
 
-## Tech stack
+- React 18 + TypeScript + Vite
+- React Router
+- Tailwind CSS + shadcn/Radix primitives
+- Recharts
+- Supabase anonymous device-scoped backup with RLS
+- localStorage as the runtime source of truth
+- Vitest + Testing Library whitebox gate
 
-React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Supabase (client). Tests with Vitest and Playwright.
+The app deliberately does **not** claim to reproduce CompTIA's proprietary scoring or exact live PBQ interface. Practice scoring, PBQ subtask credit and the 80% dashboard target are training aids.
 
-## Running it locally
+## Run locally
 
 ```bash
 git clone https://github.com/cyr6x/MCQ-X-PBQ-SIM-vercel.git
 cd MCQ-X-PBQ-SIM-vercel
-npm install
+npm install --legacy-peer-deps
 npm run dev
 ```
 
-Uses Supabase — check for a `.env.example` in the repo for any required environment variables before running.
+Copy the required Supabase values from the project environment into your local environment if you want cloud backup. Without it, the trainer remains local-first.
 
-## Status
+## Verify
 
-Actively used for my own Security+ prep — question bank and review UI still getting refined.
+```bash
+npm run test:exam
+npm run build
+```
 
-`[SCREENSHOT: exam mode question view]`
-`[SCREENSHOT: review/results screen with domain breakdown]`
+Production Vercel builds execute the same whitebox gate before bundling.
+
+## Data model
+
+Training history and question stats are stored locally first. Completed attempts and aggregate stats are backed up to device-scoped Supabase rows when available. There is no user-account recovery or cross-device merge flow, so the product describes this honestly as **backup**, not account sync.
+
+## Current status
+
+The primary router-based training system is active. The obsolete pre-router dashboard/exam implementation has been removed so there is one canonical question bank, one exam architecture and one remediation pipeline.
