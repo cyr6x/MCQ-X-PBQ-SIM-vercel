@@ -168,8 +168,11 @@ export function calculateScore(
     d.percentage = d.total > 0 ? Math.round((d.correct / d.total) * 100) : 0;
   });
 
-  // Practice scaled score only. CompTIA's exact scoring formula is not public.
-  const scaledScore = Math.round(((rawCorrect / rawTotal) * 900) / 10) * 10;
+  // Practice scaled score only. CompTIA publishes a 100–900 reporting scale,
+  // but not the proprietary item weighting/formula. Keep the simulator inside
+  // that published range without claiming equivalence to the live score.
+  const ratio = rawTotal > 0 ? rawCorrect / rawTotal : 0;
+  const scaledScore = Math.round((100 + ratio * 800) / 10) * 10;
   const timeUsedMinutes = Math.round((Date.now() - startTime) / 60000);
 
   return {
