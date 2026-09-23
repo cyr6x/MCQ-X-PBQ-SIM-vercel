@@ -368,9 +368,9 @@ export function PBQPractice({ onFinish }: Props) {
         </div>
       </header>
 
-      <main className="min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto max-w-5xl p-4 sm:p-6">
-          <div className="min-h-[520px] rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8">
+      <main className="min-h-0 flex-1 overflow-hidden">
+        <div className="mx-auto h-full max-w-6xl p-3 sm:p-5">
+          <div className="h-full overflow-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
             <PBQRenderer
               q={current}
               ans={answers[current.id]}
@@ -391,6 +391,16 @@ export function PBQPractice({ onFinish }: Props) {
         </div>
       </main>
 
+      <button
+        onClick={idx < questions.length - 1 ? () => goTo(idx + 1) : finishPractice}
+        className="fixed right-0 top-1/2 z-[90] hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
+        aria-label={idx < questions.length - 1 ? 'Next PBQ' : 'Finish PBQ set'}
+        title={idx < questions.length - 1 ? 'Next PBQ' : 'Finish PBQ set'}
+      >
+        <span>{idx < questions.length - 1 ? 'Next' : 'Finish'}</span>
+        <ChevronRight className="h-5 w-5" />
+      </button>
+
       <footer className="z-40 flex items-center justify-between gap-3 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-xl sm:px-6">
         <button
           onClick={() => goTo(idx - 1)}
@@ -409,7 +419,7 @@ export function PBQPractice({ onFinish }: Props) {
         {idx < questions.length - 1 ? (
           <button
             onClick={() => goTo(idx + 1)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground hover:opacity-90 md:hidden"
           >
             Next
             <ChevronRight className="h-4 w-4" />
@@ -417,7 +427,7 @@ export function PBQPractice({ onFinish }: Props) {
         ) : (
           <button
             onClick={finishPractice}
-            className="rounded-lg bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+            className="rounded-lg bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground hover:opacity-90 md:hidden"
           >
             Finish set
           </button>
