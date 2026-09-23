@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, ListChecks, LogOut, Filter, RotateCcw, CheckCircle2, XCircle, Trophy, Eye, EyeOff } from 'lucide-react';
 import { pbqBank, DOMAIN_LABELS, type PBQuestion, type Domain } from '@/data/questions';
-import { isPBQCorrect } from '@/lib/examEngine';
+import { getPBQCredit, isPBQCorrect } from '@/lib/examEngine';
+import { saveAttempt, type QuestionAttempt } from '@/lib/examHistory';
+import { useSettings } from '@/lib/SettingsContext';
 import { PBQRenderer } from '@/components/PBQRenderer';
 
 type PBQType = PBQuestion['type'];
@@ -18,7 +20,7 @@ const TYPE_LABELS: Record<PBQType, string> = {
 };
 
 const TYPE_DESCRIPTIONS: Record<PBQType, string> = {
-  firewall: 'Configure ALLOW/DENY actions on firewall rule sets — most common SY0-701 PBQ format.',
+  firewall: 'Configure ALLOW/DENY actions on firewall rule sets and reason about traffic policy.',
   ordering: 'Reorder steps in incident response, change management, or kill-chain workflows.',
   'log-analysis': 'Read SIEM/audit logs, identify the attack, the threat source, and the correct mitigation.',
   matching: 'Drag concepts (algorithms, controls, attack types) into the correct categories.',
@@ -33,6 +35,7 @@ interface Props {
 }
 
 export function PBQPractice({ onFinish }: Props) {
+  const { settings } = useSettings();
   const [view, setView] = useState<'menu' | 'practice' | 'summary'>('menu');
   const [filterType, setFilterType] = useState<PBQType | 'all'>('all');
   const [filterDomain, setFilterDomain] = useState<Domain | 'all'>('all');
@@ -56,12 +59,51 @@ export function PBQPractice({ onFinish }: Props) {
 
   const startPractice = () => {
     if (pool.length === 0) return;
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, settings.pbq_set_size);
     setQuestions(shuffled);
     setIdx(0);
     setAnswers({});
     setRevealed(new Set());
     setView('practice');
+  };
+
+  const finishPractice = () => {
+    if (questions.length === 0) return;
+    const now = Date.now();
+    const attempts: QuestionAttempt[] = questions.map((q) => ({
+      questionId: q.id,
+      questionText: q.title,
+      domain: DOMAIN_LABELS[q.domain],
+      type: 'pbq' as const,
+      isCorrect: isPBQCorrect(q, answers[q.id]),
+      userAnswer: JSON.stringify(answers[q.id] ?? {}),
+      correctAnswer: '',
+      explanation: q.explanation,
+      timeSpentSeconds: 0,
+      timestamp: now,
+    }));
+    const credits = questions.map((q) => getPBQCredit(q, answers[q.id]).ratio);
+    const practicePoints = credits.reduce((sum, value) => sum + value, 0);
+    const domainScores: Record<string, { correct: number; total: number }> = {};
+    questions.forEach((q, i) => {
+      const label = DOMAIN_LABELS[q.domain];
+      if (!domainScores[label]) domainScores[label] = { correct: 0, total: 0 };
+      domainScores[label].correct += credits[i];
+      domainScores[label].total += 1;
+    });
+    saveAttempt({
+      id: `pbq-lab-${now}`,
+      mode: 'practice',
+      startTime: now,
+      endTime: now,
+      totalQuestions: questions.length,
+      correctAnswers: practicePoints,
+      percentage: Math.round((practicePoints / questions.length) * 100),
+      passed: practicePoints / questions.length >= 0.75,
+      questions: attempts,
+      domainScores,
+    });
+    setView('summary');
   };
 
   const cur = questions[idx];
@@ -73,7 +115,7 @@ export function PBQPractice({ onFinish }: Props) {
         <div className="max-w-4xl mx-auto p-6 sm:p-10">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-1">PEARSON-STYLE • SY0-701</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-accent mb-1">APPLIED PRACTICE • SY0-701</p>
               <h1 className="text-3xl font-black">PBQ Practice Lab</h1>
               <p className="text-sm text-muted-foreground mt-1">Eight simulator interaction formats for SY0-701 practice — drilled, untimed, with full explanations and subtask feedback.</p>
             </div>
@@ -138,8 +180,8 @@ export function PBQPractice({ onFinish }: Props) {
           <div className="rounded-2xl border border-border bg-card p-6 flex items-center justify-between shadow-sm">
             <div>
               <p className="text-xs uppercase tracking-widest font-bold text-muted-foreground mb-1">Practice Set</p>
-              <p className="text-2xl font-black">{pool.length} question{pool.length !== 1 ? 's' : ''}</p>
-              <p className="text-xs text-muted-foreground mt-1">Untimed • Instant feedback • Pearson-style UI</p>
+              <p className="text-2xl font-black">{Math.min(pool.length, settings.pbq_set_size)} question{Math.min(pool.length, settings.pbq_set_size) !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-muted-foreground mt-1">Untimed • Instant feedback • Configurable set size</p>
             </div>
             <button
               onClick={startPractice}
@@ -160,10 +202,12 @@ export function PBQPractice({ onFinish }: Props) {
       q,
       correct: isPBQCorrect(q, answers[q.id]),
       attempted: !!answers[q.id],
+      credit: getPBQCredit(q, answers[q.id]),
     }));
     const passed = results.filter(r => r.correct).length;
     const failed = results.length - passed;
-    const pct = Math.round((passed / results.length) * 100);
+    const earned = results.reduce((sum, r) => sum + r.credit.ratio, 0);
+    const pct = Math.round((earned / results.length) * 100);
 
     return (
       <div className="min-h-screen bg-background text-foreground">
@@ -264,7 +308,7 @@ export function PBQPractice({ onFinish }: Props) {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto bg-[#fafafa] dark:bg-background">
+      <div className="flex-1 overflow-auto bg-background">
         <div className="max-w-4xl mx-auto p-4 sm:p-8">
           <div className="bg-card rounded-3xl border border-border shadow-sm min-h-[500px] p-6 sm:p-10">
             <PBQRenderer
@@ -307,7 +351,7 @@ export function PBQPractice({ onFinish }: Props) {
           </button>
         ) : (
           <button
-            onClick={() => setView('summary')}
+            onClick={finishPractice}
             className="px-8 py-3 rounded-xl bg-accent text-accent-foreground font-black text-sm uppercase tracking-widest hover:opacity-90 shadow-xl"
           >
             See Results

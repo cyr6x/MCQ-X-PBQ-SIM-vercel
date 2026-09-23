@@ -31,6 +31,15 @@ export default function DashboardPage() {
     () => Object.values(stats).reduce((s, q) => s + q.timesAttempted, 0),
     [stats]
   );
+  const needsReview = useMemo(
+    () => Object.values(stats).filter((q) => q.streak < 0).length,
+    [stats]
+  );
+  const pbqReps = useMemo(
+    () => Object.values(stats).filter((q) => q.type === 'pbq').reduce((s, q) => s + q.timesAttempted, 0),
+    [stats]
+  );
+
   const overallAccuracy = useMemo(() => {
     const correct = Object.values(stats).reduce((s, q) => s + q.timesCorrect, 0);
     return totalAnswered > 0 ? Math.round((correct / totalAnswered) * 100) : 0;
@@ -114,7 +123,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
         <ActionTile
           title="Start Exam Simulation"
           desc="90 questions · 90 minutes · no pause · final review"
@@ -131,10 +140,17 @@ export default function DashboardPage() {
         />
         <ActionTile
           title="PBQ Lab"
-          desc="Drill every Performance-Based Question type"
+          desc={pbqReps ? `${pbqReps} PBQ reps tracked · drill applied tasks` : 'Drill applied PBQ tasks with feedback'}
           icon={<Layers className="w-5 h-5" />}
           onClick={() => navigate('/pbq')}
           accent="accent"
+        />
+        <ActionTile
+          title={needsReview ? `Review Misses (${needsReview})` : 'Review Misses'}
+          desc={needsReview ? 'Close unresolved mistakes before the next full form' : 'No unresolved misses right now'}
+          icon={<RotateCcw className="w-5 h-5" />}
+          onClick={() => navigate('/review')}
+          accent={needsReview ? 'primary' : 'accent'}
         />
       </div>
 

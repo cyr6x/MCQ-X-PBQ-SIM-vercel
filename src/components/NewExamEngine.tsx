@@ -358,7 +358,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto bg-[#fafafa] dark:bg-background">
+      <div className="flex-1 overflow-auto bg-background">
         <div className="mx-auto grid max-w-7xl gap-6 p-4 sm:p-8 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className="min-w-0">
           

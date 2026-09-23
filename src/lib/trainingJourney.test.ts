@@ -1,0 +1,127 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  buildExam,
+  mcqSingle,
+  mcqSelectTwo,
+  pbqBank,
+  type MCQuestion,
+  type PBQuestion,
+} from '@/data/questions';
+import { buildStrictExamOrder } from '@/lib/strictExamOrder';
+import { calculateScore, getPBQCredit, isMCQCorrect } from '@/lib/examEngine';
+import { SY0701_OBJECTIVE_LABELS } from '@/lib/sy0701Objectives';
+
+function modelPBQAnswer(q: PBQuestion): unknown {
+  switch (q.type) {
+    case 'firewall':
+      return [...q.correctActions];
+    case 'ordering':
+      return [...q.steps].sort((a, b) => a.correctPosition - b.correctPosition).map((step) => step.label);
+    case 'log-analysis':
+      return { attackType: q.correctAttackType, sourceIP: q.correctSourceIP, response: q.correctResponse };
+    case 'matching':
+      return Object.fromEntries(q.items.map((item) => [item.left, item.correctRight]));
+    case 'placement':
+      return Object.fromEntries(q.items.map((item) => [item.label, item.correctZone]));
+    case 'terminal':
+      return q.tasks.map((task) => task.correctIndex);
+    case 'packet-analysis':
+      return {
+        packetIds: [...q.suspiciousPacketIds],
+        attackType: q.correctAttackType,
+        response: q.correctResponse,
+      };
+    case 'topology':
+      return Object.fromEntries(q.nodes.map((node) => [node.id, node.correctZone]));
+  }
+}
+
+function wrongMCQAnswer(q: MCQuestion): number | number[] {
+  if (q.type === 'select-two') return [];
+  const correct = q.answer as number;
+  return (correct + 1) % q.options.length;
+}
+
+describe('full training journey whitebox', () => {
+  it('validates every MCQ key and every PBQ model solution in the bank', () => {
+    [...mcqSingle, ...mcqSelectTwo].forEach((q) => {
+      if (q.type === 'single') {
+        expect(q.answer).toBeGreaterThanOrEqual(0);
+        expect(q.answer).toBeLessThan(q.options.length);
+      } else {
+        expect(q.answer).toHaveLength(2);
+        expect(new Set(q.answer).size).toBe(2);
+        q.answer.forEach((index) => {
+          expect(index).toBeGreaterThanOrEqual(0);
+          expect(index).toBeLessThan(q.options.length);
+        });
+      }
+    });
+
+    pbqBank.forEach((q) => {
+      expect(getPBQCredit(q, modelPBQAnswer(q)).ratio).toBe(1);
+    });
+  });
+
+
+  it('covers every official SY0-701 objective with at least three bank items', () => {
+    const all = [...mcqSingle, ...mcqSelectTwo, ...pbqBank];
+    const counts = all.reduce<Record<string, number>>((acc, question) => {
+      if (question.objective) acc[question.objective] = (acc[question.objective] || 0) + 1;
+      return acc;
+    }, {});
+
+    Object.keys(SY0701_OBJECTIVE_LABELS).forEach((objective) => {
+      expect(counts[objective] || 0, `objective ${objective}`).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  it('runs a 90-item mixed form with multiple PBQs, misses, review signals and a strong pass', () => {
+    const exam = buildExam(3);
+    const ordered = buildStrictExamOrder(exam.pbqs, exam.mcqs, 3);
+
+    expect(ordered).toHaveLength(90);
+    expect(new Set(exam.pbqs.map((q) => q.type)).size).toBeGreaterThanOrEqual(4);
+
+    const pbqPositions = ordered
+      .map((item, index) => item.kind === 'pbq' ? index : -1)
+      .filter((index) => index >= 0);
+    expect(pbqPositions.some((index) => index < 30)).toBe(true);
+    expect(pbqPositions.some((index) => index >= 30 && index < 60)).toBe(true);
+    expect(pbqPositions.some((index) => index >= 60)).toBe(true);
+
+    const mcqAnswers: Record<string, number | number[]> = {};
+    exam.mcqs.forEach((q, index) => {
+      mcqAnswers[q.id] = index < 6 ? wrongMCQAnswer(q) : q.answer;
+    });
+
+    const pbqAnswers: Record<string, unknown> = {};
+    exam.pbqs.forEach((q, index) => {
+      pbqAnswers[q.id] = index === 0 ? undefined : modelPBQAnswer(q);
+    });
+
+    const result = calculateScore(exam.pbqs, exam.mcqs, pbqAnswers, mcqAnswers, Date.now());
+
+    const missedMcqs = exam.mcqs.filter((q) => !isMCQCorrect(q, mcqAnswers[q.id]));
+    const weakPbqs = exam.pbqs.filter((q) => getPBQCredit(q, pbqAnswers[q.id]).ratio < 1);
+
+    expect(missedMcqs).toHaveLength(6);
+    expect(weakPbqs).toHaveLength(1);
+    expect(result.passed).toBe(true);
+    expect(result.scaledScore).toBeGreaterThanOrEqual(800);
+    expect(result.domainScores).toBeDefined();
+  });
+
+  it('excludes interruption pause time from the reported training duration', () => {
+    const exam = buildExam(1);
+    const now = Date.now();
+    const start = now - 20 * 60_000;
+    const paused = 10 * 60_000;
+
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const result = calculateScore(exam.pbqs, exam.mcqs, {}, {}, start, paused);
+    spy.mockRestore();
+
+    expect(result.timeUsedMinutes).toBe(10);
+  });
+});

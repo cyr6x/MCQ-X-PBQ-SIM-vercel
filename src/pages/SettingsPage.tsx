@@ -76,18 +76,59 @@ export default function SettingsPage() {
             <option value="required">Required per question</option>
           </select>
         </Field>
+        <ToggleRow
+          label="Allow interruption pause"
+          help="Stops the exam timer and covers the question until you resume."
+          checked={s.exam_pause_enabled}
+          onChange={(value) => updateField('exam_pause_enabled', value)}
+        />
+        <ToggleRow
+          label="Auto fullscreen on exam start"
+          help="Useful for dedicated mock sessions; leave off when multitasking."
+          checked={s.exam_auto_fullscreen}
+          onChange={(value) => updateField('exam_auto_fullscreen', value)}
+        />
+        <ToggleRow
+          label="Focus-change notice"
+          help="Records when the active exam tab loses focus unless the exam is paused."
+          checked={s.exam_focus_notice}
+          onChange={(value) => updateField('exam_focus_notice', value)}
+        />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Amber timer threshold (s)">
-            <input type="number" min={60} value={s.amber_threshold_seconds}
+            <input type="number" min={60} max={5400} value={s.amber_threshold_seconds}
               onChange={(e) => updateField('amber_threshold_seconds', Number(e.target.value))}
               className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
           </Field>
           <Field label="Red timer threshold (s)">
-            <input type="number" min={30} value={s.red_threshold_seconds}
+            <input type="number" min={30} max={1800} value={s.red_threshold_seconds}
               onChange={(e) => updateField('red_threshold_seconds', Number(e.target.value))}
               className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
           </Field>
         </div>
+      </Section>
+
+      <Section title="Training set sizes">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Field label="Sprint questions">
+            <input type="number" min={10} max={60} value={s.sprint_question_count}
+              onChange={(e) => updateField('sprint_question_count', Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
+          </Field>
+          <Field label="Random drill questions">
+            <input type="number" min={10} max={100} value={s.random_question_count}
+              onChange={(e) => updateField('random_question_count', Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
+          </Field>
+          <Field label="PBQ lab set size">
+            <input type="number" min={1} max={25} value={s.pbq_set_size}
+              onChange={(e) => updateField('pbq_set_size', Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
+          </Field>
+        </div>
+        <p className="text-[11px] leading-5 text-muted-foreground">
+          Full exam simulations stay at 90 questions / 90 minutes. These controls only change training drills.
+        </p>
       </Section>
 
       <Section title="Accessibility">
@@ -154,6 +195,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <label className="block">
       <span className="text-xs font-mono uppercase text-muted-foreground mb-1 block">{label}</span>
       {children}
+    </label>
+  );
+}
+
+function ToggleRow({ label, help, checked, onChange }: { label: string; help: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/20 px-3 py-3 cursor-pointer">
+      <span>
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{help}</span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0 accent-current"
+      />
     </label>
   );
 }

@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Flag, ListChecks, ShieldCheck } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Flag,
+  ListChecks,
+  Pause,
+  Play,
+  ShieldCheck,
+} from 'lucide-react';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { calculateScore, isMCQCorrect, isPBQCorrect, type ScoreResult } from '@/lib/examEngine';
 import { saveAttempt, type QuestionAttempt } from '@/lib/examHistory';
@@ -8,6 +18,7 @@ import { PBQRenderer } from '@/components/PBQRenderer';
 import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { ExamResults } from '@/components/ExamResults';
 import { buildStrictExamOrder } from '@/lib/strictExamOrder';
+import { useSettings } from '@/lib/SettingsContext';
 
 type ReviewFilter = 'all' | 'incomplete' | 'flagged';
 
@@ -38,6 +49,7 @@ export function StrictExamEngine({
   examNumber = 1,
   onFinish,
 }: StrictExamEngineProps) {
+  const { settings } = useSettings();
   const questions = useMemo(
     () => buildStrictExamOrder(pbqs, mcqs, examNumber),
     [pbqs, mcqs, examNumber],
@@ -54,11 +66,14 @@ export function StrictExamEngine({
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [focusNotice, setFocusNotice] = useState(false);
   const [focusViolations, setFocusViolations] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   const startTimeRef = useRef(Date.now());
   const timeByQuestionRef = useRef<Record<string, number>>({});
   const activeItemRef = useRef<{ id: string; startedAt: number } | null>(null);
   const submittedRef = useRef(false);
+  const totalPausedMsRef = useRef(0);
+  const pauseStartedAtRef = useRef<number | null>(null);
 
   const current = questions[idx];
   const currentId = current?.data.id;
@@ -85,10 +100,33 @@ export function StrictExamEngine({
   }, []);
 
   useEffect(() => {
-    if (phase !== 'item' || !currentId) return;
+    if (phase !== 'item' || !currentId || isPaused) return;
     activeItemRef.current = { id: currentId, startedAt: Date.now() };
     return () => recordCurrentItemTime();
-  }, [currentId, phase, recordCurrentItemTime]);
+  }, [currentId, phase, isPaused, recordCurrentItemTime]);
+
+  const togglePause = useCallback(() => {
+    if (!settings.exam_pause_enabled || phase === 'submitted') return;
+
+    if (isPaused) {
+      const started = pauseStartedAtRef.current;
+      if (started !== null) totalPausedMsRef.current += Date.now() - started;
+      pauseStartedAtRef.current = null;
+      setIsPaused(false);
+      return;
+    }
+
+    recordCurrentItemTime();
+    pauseStartedAtRef.current = Date.now();
+    setIsPaused(true);
+  }, [isPaused, phase, recordCurrentItemTime, settings.exam_pause_enabled]);
+
+  const pausedMilliseconds = useCallback(() => {
+    const activePause = isPaused && pauseStartedAtRef.current !== null
+      ? Date.now() - pauseStartedAtRef.current
+      : 0;
+    return totalPausedMsRef.current + activePause;
+  }, [isPaused]);
 
   const finishExam = useCallback(() => {
     if (submittedRef.current) return;
@@ -96,7 +134,14 @@ export function StrictExamEngine({
     recordCurrentItemTime();
 
     const startTime = startTimeRef.current;
-    const result = calculateScore(pbqs, mcqs, pbqAnswers, mcqAnswers, startTime);
+    const result = calculateScore(
+      pbqs,
+      mcqs,
+      pbqAnswers,
+      mcqAnswers,
+      startTime,
+      pausedMilliseconds(),
+    );
     const questionTimes = { ...timeByQuestionRef.current };
 
     const attemptQs: QuestionAttempt[] = [
@@ -146,10 +191,12 @@ export function StrictExamEngine({
 
     setScoreResult(result);
     setShowEndConfirm(false);
+    setIsPaused(false);
     setPhase('submitted');
   }, [
     mcqAnswers,
     mcqs,
+    pausedMilliseconds,
     pbqAnswers,
     pbqs,
     questions.length,
@@ -157,17 +204,21 @@ export function StrictExamEngine({
   ]);
 
   useEffect(() => {
-    if (phase === 'submitted') return;
+    if (phase === 'submitted' || isPaused) return;
+
     const tick = () => {
-      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const elapsed = Math.floor(
+        (Date.now() - startTimeRef.current - totalPausedMsRef.current) / 1000
+      );
       const next = Math.max(0, durationMinutes * 60 - elapsed);
       setRemaining(next);
       if (next === 0) finishExam();
     };
+
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [durationMinutes, finishExam, phase]);
+  }, [durationMinutes, finishExam, isPaused, phase]);
 
   useEffect(() => {
     if (phase === 'submitted') return;
@@ -179,6 +230,7 @@ export function StrictExamEngine({
 
     let wasHidden = false;
     const visibility = () => {
+      if (!settings.exam_focus_notice || isPaused) return;
       if (document.hidden) {
         wasHidden = true;
         setFocusViolations(count => count + 1);
@@ -194,19 +246,25 @@ export function StrictExamEngine({
       window.removeEventListener('beforeunload', beforeUnload);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [phase]);
+  }, [isPaused, phase, settings.exam_focus_notice]);
 
   const timerDisplay = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
+  const timerTone =
+    remaining <= settings.red_threshold_seconds
+      ? 'destructive'
+      : remaining <= settings.amber_threshold_seconds
+        ? 'warning'
+        : 'normal';
 
   const goToQuestion = (nextIndex: number) => {
-    if (nextIndex < 0 || nextIndex >= questions.length) return;
+    if (isPaused || nextIndex < 0 || nextIndex >= questions.length) return;
     recordCurrentItemTime();
     setIdx(nextIndex);
     setPhase('item');
   };
 
   const toggleFlag = () => {
-    if (!currentId) return;
+    if (!currentId || isPaused) return;
     setFlags(previous => {
       const next = new Set(previous);
       if (next.has(currentId)) next.delete(currentId);
@@ -217,24 +275,35 @@ export function StrictExamEngine({
 
   if (phase === 'submitted' && scoreResult) {
     return (
-      <div className="dark min-h-screen bg-slate-950 text-slate-100">
-      <ExamResults
-        score={scoreResult}
-        pbqs={pbqs}
-        mcqs={mcqs}
-        pbqAnswers={pbqAnswers}
-        mcqAnswers={mcqAnswers}
-        flags={flags}
-        questionOrder={questions.map(question => question.data.id)}
-        onRestart={() => window.location.reload()}
-        onBackToMenu={() => {
-          if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-          onFinish();
-        }}
-      />
+      <div className="min-h-screen bg-background text-foreground">
+        <ExamResults
+          score={scoreResult}
+          pbqs={pbqs}
+          mcqs={mcqs}
+          pbqAnswers={pbqAnswers}
+          mcqAnswers={mcqAnswers}
+          flags={flags}
+          questionOrder={questions.map(question => question.data.id)}
+          onRestart={() => window.location.reload()}
+          onBackToMenu={() => {
+            if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+            onFinish();
+          }}
+        />
       </div>
     );
   }
+
+  const topBar = (
+    <ExamTopBar
+      timerDisplay={timerDisplay}
+      examNumber={examNumber}
+      timerTone={timerTone}
+      pauseEnabled={settings.exam_pause_enabled}
+      isPaused={isPaused}
+      onPause={togglePause}
+    />
+  );
 
   if (phase === 'review') {
     const visibleQuestions = questions
@@ -246,26 +315,27 @@ export function StrictExamEngine({
       });
 
     return (
-      <div className="dark min-h-screen bg-slate-950 text-slate-100">
-        <ExamTopBar timerDisplay={timerDisplay} examNumber={examNumber} />
+      <div className="min-h-screen bg-background text-foreground">
+        {topBar}
+        {isPaused && <PauseOverlay onResume={togglePause} />}
         <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-          <section className="overflow-hidden rounded-sm border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="border-b border-slate-300 bg-slate-100 px-5 py-3 dark:border-slate-700 dark:bg-slate-800">
+          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="border-b border-border bg-muted/35 px-5 py-3">
               <h1 className="text-base font-semibold">Item Review</h1>
             </div>
 
-            <div className="border-b border-slate-200 px-5 py-4 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:text-slate-300">
+            <div className="border-b border-border px-5 py-4 text-sm leading-6 text-muted-foreground">
               Review any item before ending the exam. Unanswered items are marked incomplete. Flagging an item does not change its score.
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
               <div className="text-sm font-semibold">
-                Items <span className="font-normal text-red-600">({incompleteCount} Unseen/Incomplete)</span>
+                Items <span className="font-normal text-destructive">({incompleteCount} Unseen/Incomplete)</span>
               </div>
-              <div className="text-xs text-slate-500">{flags.size} flagged</div>
+              <div className="text-xs text-muted-foreground">{flags.size} flagged</div>
             </div>
 
-            <div className="grid gap-px bg-slate-200 p-px dark:bg-slate-800 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-px bg-border p-px sm:grid-cols-2 lg:grid-cols-3">
               {visibleQuestions.map(({ question, index }) => {
                 const answered = isAnswered(question);
                 const flagged = flags.has(question.data.id);
@@ -273,26 +343,26 @@ export function StrictExamEngine({
                   <button
                     key={question.data.id}
                     onClick={() => goToQuestion(index)}
-                    className="flex min-h-14 items-center gap-3 bg-white px-4 py-3 text-left hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"
+                    className="flex min-h-14 items-center gap-3 bg-card px-4 py-3 text-left hover:bg-muted/50"
                   >
-                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-amber-500' : 'text-slate-300 dark:text-slate-600'}`} />
+                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/40'}`} />
                     <span className="font-mono text-sm font-semibold">Question {index + 1}</span>
-                    {!answered && <span className="ml-auto text-[11px] font-semibold text-red-600">Incomplete</span>}
+                    {!answered && <span className="ml-auto text-[11px] font-semibold text-destructive">Incomplete</span>}
                   </button>
                 );
               })}
             </div>
 
             {visibleQuestions.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-slate-500">
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
                 No items match this review filter.
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-300 bg-slate-100 px-4 py-4 dark:border-slate-700 dark:bg-slate-800">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-4">
               <button
                 onClick={() => setShowEndConfirm(true)}
-                className="mr-auto rounded-sm border border-slate-400 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900"
+                className="mr-auto rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-muted"
               >
                 End Review
               </button>
@@ -304,10 +374,10 @@ export function StrictExamEngine({
                 <button
                   key={key}
                   onClick={() => setReviewFilter(key)}
-                  className={`rounded-sm border px-4 py-2 text-sm font-semibold ${
+                  className={`rounded-lg border px-4 py-2 text-sm font-semibold ${
                     reviewFilter === key
-                      ? 'border-sky-700 bg-sky-700 text-white'
-                      : 'border-slate-400 bg-white hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900'
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {label}
@@ -316,7 +386,13 @@ export function StrictExamEngine({
             </div>
           </section>
         </main>
-        {showEndConfirm && <EndExamConfirm incompleteCount={incompleteCount} onCancel={() => setShowEndConfirm(false)} onConfirm={finishExam} />}
+        {showEndConfirm && (
+          <EndExamConfirm
+            incompleteCount={incompleteCount}
+            onCancel={() => setShowEndConfirm(false)}
+            onConfirm={finishExam}
+          />
+        )}
       </div>
     );
   }
@@ -324,29 +400,30 @@ export function StrictExamEngine({
   if (!current) return null;
 
   return (
-    <div className="dark min-h-screen bg-slate-950 text-slate-100">
-      <ExamTopBar timerDisplay={timerDisplay} examNumber={examNumber} />
+    <div className="min-h-screen bg-background text-foreground">
+      {topBar}
+      {isPaused && <PauseOverlay onResume={togglePause} />}
 
       {focusNotice && (
-        <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
-          Exam condition notice: the test window lost focus. The timer continued running.
+        <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs font-medium text-warning">
+          Focus changed while the exam was running. The timer continued.
           <button onClick={() => setFocusNotice(false)} className="ml-3 underline">Dismiss</button>
         </div>
       )}
 
       <div className="mx-auto max-w-5xl px-4 py-5 sm:px-8">
-        <div className="mb-4 flex items-center justify-between border-b border-slate-300 pb-3 dark:border-slate-700">
+        <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
           <div>
-            <div className="text-[11px] uppercase tracking-wide text-slate-500">Question</div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Question</div>
             <div className="font-mono text-lg font-semibold">{idx + 1} of {questions.length}</div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleFlag}
-              className={`flex items-center gap-2 rounded-sm border px-3 py-2 text-xs font-semibold ${
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
                 flags.has(currentId)
-                  ? 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
-                  : 'border-slate-400 bg-white hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900'
+                  ? 'border-warning/50 bg-warning/10 text-warning'
+                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
               }`}
             >
               <Flag className={`h-4 w-4 ${flags.has(currentId) ? 'fill-current' : ''}`} />
@@ -354,11 +431,12 @@ export function StrictExamEngine({
             </button>
             <button
               onClick={() => {
+                if (isPaused) return;
                 recordCurrentItemTime();
                 setReviewFilter('all');
                 setPhase('review');
               }}
-              className="flex items-center gap-2 rounded-sm border border-slate-400 bg-white px-3 py-2 text-xs font-semibold hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900"
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
               <ListChecks className="h-4 w-4" />
               Review
@@ -366,7 +444,7 @@ export function StrictExamEngine({
           </div>
         </div>
 
-        <section className="min-h-[520px] border border-slate-300 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8">
+        <section className="min-h-[520px] rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8">
           {current.kind === 'pbq' ? (
             <PBQRenderer
               q={current.data}
@@ -385,34 +463,39 @@ export function StrictExamEngine({
           )}
         </section>
 
-        <footer className="mt-4 flex items-center justify-between border-t border-slate-300 pt-4 dark:border-slate-700">
+        <footer className="mt-4 flex items-center justify-between border-t border-border pt-4">
           <button
             onClick={() => goToQuestion(idx - 1)}
             disabled={idx === 0}
-            className="flex items-center gap-2 rounded-sm border border-slate-400 bg-white px-5 py-2.5 text-sm font-semibold disabled:opacity-30 dark:border-slate-600 dark:bg-slate-900"
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-semibold disabled:opacity-30 hover:bg-muted"
           >
             <ChevronLeft className="h-4 w-4" /> Previous
           </button>
 
-          <div className="hidden text-xs text-slate-500 sm:block">
-            {focusViolations > 0 ? `Focus changes recorded: ${focusViolations}` : 'Exam timer continues until final submission'}
+          <div className="hidden text-xs text-muted-foreground sm:block">
+            {focusViolations > 0
+              ? `Focus changes recorded: ${focusViolations}`
+              : settings.exam_pause_enabled
+                ? 'Pause is available for real-world interruptions'
+                : 'Exam timer runs continuously'}
           </div>
 
           {idx < questions.length - 1 ? (
             <button
               onClick={() => goToQuestion(idx + 1)}
-              className="flex items-center gap-2 rounded-sm bg-sky-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-sky-800"
+              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
               Next <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
             <button
               onClick={() => {
+                if (isPaused) return;
                 recordCurrentItemTime();
                 setReviewFilter('all');
                 setPhase('review');
               }}
-              className="flex items-center gap-2 rounded-sm bg-sky-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-sky-800"
+              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
             >
               Review Exam <ChevronRight className="h-4 w-4" />
             </button>
@@ -423,22 +506,80 @@ export function StrictExamEngine({
   );
 }
 
-function ExamTopBar({ timerDisplay, examNumber }: { timerDisplay: string; examNumber: number }) {
+function ExamTopBar({
+  timerDisplay,
+  examNumber,
+  timerTone,
+  pauseEnabled,
+  isPaused,
+  onPause,
+}: {
+  timerDisplay: string;
+  examNumber: number;
+  timerTone: 'normal' | 'warning' | 'destructive';
+  pauseEnabled: boolean;
+  isPaused: boolean;
+  onPause: () => void;
+}) {
+  const timerClass =
+    timerTone === 'destructive'
+      ? 'border-destructive/40 bg-destructive/10 text-destructive'
+      : timerTone === 'warning'
+        ? 'border-warning/40 bg-warning/10 text-warning'
+        : 'border-border bg-muted/35 text-foreground';
+
   return (
-    <header className="border-b border-slate-300 bg-slate-900 text-white dark:border-slate-700">
-      <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-8">
+    <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur-xl">
+      <div className="mx-auto flex min-h-14 max-w-6xl items-center gap-3 px-4 py-2 sm:px-8">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-sky-300" />
+          <ShieldCheck className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold">Security+ SY0-701 Simulation</span>
-          <span className="hidden text-xs text-slate-400 sm:inline">Form {examNumber}</span>
+          <span className="hidden rounded-md border border-border bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground sm:inline">
+            Form {examNumber}
+          </span>
         </div>
-        <div className="ml-auto flex items-center gap-2 font-mono text-sm font-semibold">
-          <Clock className="h-4 w-4 text-slate-400" />
-          <span className="hidden text-xs font-normal text-slate-400 sm:inline">Time Remaining</span>
-          {timerDisplay}
+
+        <div className="ml-auto flex items-center gap-2">
+          {pauseEnabled && (
+            <button
+              onClick={onPause}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+              <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+            </button>
+          )}
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
+            <Clock className="h-4 w-4" />
+            <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>
+            {timerDisplay}
+          </div>
         </div>
       </div>
     </header>
+  );
+}
+
+function PauseOverlay({ onResume }: { onResume: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-4 backdrop-blur-xl">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-2xl">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Pause className="h-7 w-7" />
+        </div>
+        <h2 className="text-xl font-bold">Exam paused</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          The countdown and question timer are stopped, and the active question is covered until you resume.
+        </p>
+        <button
+          onClick={onResume}
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+        >
+          <Play className="h-4 w-4" />
+          Resume exam
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -470,8 +611,8 @@ function StrictMCQ({
   return (
     <div>
       {q.type === 'select-two' && (
-        <div className="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
-          Select TWO.
+        <div className="mb-4 inline-flex rounded-md border border-accent/25 bg-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-accent">
+          Select exactly two
         </div>
       )}
       <h1 className="mb-5 max-w-4xl text-lg font-medium leading-7 sm:text-xl">{q.question}</h1>
@@ -483,16 +624,16 @@ function StrictMCQ({
             <button
               key={index}
               onClick={() => choose(index)}
-              className={`flex w-full items-start gap-3 rounded-sm border px-4 py-3 text-left text-sm leading-6 ${
+              className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm leading-6 transition-all ${
                 selected
-                  ? 'border-sky-700 bg-sky-50 ring-1 ring-sky-700 dark:bg-sky-950'
-                  : 'border-slate-300 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800'
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                  : 'border-border bg-background/35 hover:border-primary/40 hover:bg-muted/30'
               }`}
             >
-              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${
                 selected
-                  ? 'border-sky-700 bg-sky-700 text-white'
-                  : 'border-slate-400 text-slate-600 dark:border-slate-600 dark:text-slate-300'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground'
               }`}>
                 {String.fromCharCode(65 + index)}
               </span>
@@ -515,22 +656,28 @@ function EndExamConfirm({
   onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-      <div className="w-full max-w-md rounded-sm border border-slate-300 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="mb-3 flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-amber-600" />
+          <AlertTriangle className="h-5 w-5 text-warning" />
           <h2 className="text-lg font-semibold">End exam?</h2>
         </div>
-        <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+        <p className="text-sm leading-6 text-muted-foreground">
           {incompleteCount > 0
             ? `You still have ${incompleteCount} incomplete item${incompleteCount === 1 ? '' : 's'}. Ending the exam submits them unanswered.`
             : 'Once you end the exam, you cannot return to any question.'}
         </p>
         <div className="mt-6 flex justify-end gap-2">
-          <button onClick={onCancel} className="rounded-sm border border-slate-400 px-4 py-2 text-sm font-semibold">
+          <button
+            onClick={onCancel}
+            className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-muted"
+          >
             Continue Review
           </button>
-          <button onClick={onConfirm} className="rounded-sm bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800">
+          <button
+            onClick={onConfirm}
+            className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:opacity-90"
+          >
             End Exam
           </button>
         </div>

@@ -23,15 +23,17 @@ export default function AnalyticsPage() {
   const history = useMemo(() => loadHistory(), [tick]);
   const stats = useMemo(() => loadQuestionStats(), [tick]);
   const readiness = useMemo(() => (history.length > 0 ? calculateReadiness() : null), [tick, history.length]);
+  const examHistory = useMemo(() => history.filter((attempt) => attempt.mode === 'exam' && attempt.totalQuestions >= 80), [history]);
+  const trendSource = examHistory.length > 0 ? examHistory : history;
 
   const trendData = useMemo(() => {
-    return history.slice(0, 15).reverse().map((a, i) => ({
+    return trendSource.slice(0, 15).reverse().map((a, i) => ({
       idx: i + 1,
       date: new Date(a.endTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
       percentage: a.percentage,
       scaled: Math.round(100 + (a.percentage / 100) * 800),
     }));
-  }, [history]);
+  }, [trendSource]);
 
   const domainData = useMemo(() => {
     const map: Record<string, { correct: number; total: number }> = {};
@@ -54,11 +56,13 @@ export default function AnalyticsPage() {
   const totalAnswered = Object.values(stats).reduce((s, q) => s + q.timesAttempted, 0);
   const correctAnswered = Object.values(stats).reduce((s, q) => s + q.timesCorrect, 0);
   const accuracy = totalAnswered > 0 ? Math.round((correctAnswered / totalAnswered) * 100) : 0;
-  const avgTime = useMemo(() => {
-    const times = Object.values(stats).map((s) => s.avgTimeSeconds).filter((t) => t > 0);
-    if (!times.length) return 0;
-    return Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-  }, [stats]);
+  const unresolved = Object.values(stats).filter((item) => item.streak < 0).length;
+  const pbqReps = Object.values(stats)
+    .filter((item) => item.type === 'pbq')
+    .reduce((sum, item) => sum + item.timesAttempted, 0);
+  const fullExamAverage = examHistory.length
+    ? Math.round(examHistory.reduce((sum, attempt) => sum + attempt.percentage, 0) / examHistory.length)
+    : null;
 
   const trendIcon = readiness?.trend === 'improving'
     ? <TrendingUp className="h-4 w-4 text-success" />
@@ -81,14 +85,19 @@ export default function AnalyticsPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <Stat label="Readiness" value={readiness ? `${readiness.overall}/100` : '—'} icon={<Brain className="w-4 h-4" />} trailing={readiness ? trendIcon : null} />
-        <Stat label="Accuracy" value={`${accuracy}%`} icon={<Target className="w-4 h-4" />} />
-        <Stat label="Attempts" value={String(history.length)} icon={<BarChart3 className="w-4 h-4" />} />
-        <Stat label="Avg time / Q" value={avgTime ? `${avgTime}s` : '—'} icon={<Clock className="w-4 h-4" />} />
+        <Stat label="Full exam avg" value={fullExamAverage !== null ? `${fullExamAverage}%` : '—'} icon={<Target className="w-4 h-4" />} />
+        <Stat label="Needs review" value={String(unresolved)} icon={<BarChart3 className="w-4 h-4" />} />
+        <Stat label="PBQ reps" value={String(pbqReps)} icon={<Clock className="w-4 h-4" />} />
       </div>
 
       {/* Score trend */}
       <div className="bg-card border border-border rounded-xl p-5 mb-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Score trend (last {trendData.length} attempts)</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {examHistory.length ? 'Full exam trend' : 'Practice trend'} (last {trendData.length})
+          </h2>
+          <span className="text-[10px] text-muted-foreground">All-practice accuracy: {accuracy}% · {totalAnswered} tracked responses</span>
+        </div>
         <div style={{ width: '100%', minHeight: 260 }}>
           {trendData.length === 0 ? (
             <Empty body="Take a practice exam or study set — your score trajectory will appear here." />
@@ -102,7 +111,7 @@ export default function AnalyticsPage() {
                   contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', fontSize: 12 }}
                   formatter={(v: number, n) => n === 'percentage' ? [`${v}%`, 'Accuracy'] : [v, 'Scaled']}
                 />
-                <ReferenceLine y={75} stroke="hsl(var(--success))" strokeDasharray="4 2" label={{ value: 'Pass (~75%)', fontSize: 10, fill: 'hsl(var(--success))' }} />
+                <ReferenceLine y={80} stroke="hsl(var(--success))" strokeDasharray="4 2" label={{ value: 'Training target 80%', fontSize: 10, fill: 'hsl(var(--success))' }} />
                 <Line type="monotone" dataKey="percentage" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
