@@ -233,6 +233,19 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const timerDisplay = `${String(timerMins).padStart(2,'0')}:${String(timerSecs).padStart(2,'0')}`;
   const isWarning10 = remaining <= 600;
 
+  const advanceOrFinish = () => {
+    if (idx < questions.length - 1) {
+      goTo(idx + 1);
+      return;
+    }
+    if (isStudyMode) {
+      handleSubmit();
+      onFinish();
+      return;
+    }
+    setShowConfirmSubmit(true);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans selection:bg-primary/20">
       
@@ -349,13 +362,13 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto bg-background">
-        <div className="mx-auto grid max-w-7xl gap-6 p-4 sm:p-8 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="min-w-0">
+      <div className="min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="mx-auto flex h-full max-w-6xl flex-col p-3 sm:p-5">
+          <div className="min-h-0 flex flex-1 flex-col">
           
           {/* Progress Grid */}
           {showNav && (
-            <div className="mb-8 p-6 rounded-2xl bg-card border border-border shadow-xl animate-in slide-in-from-top-4 duration-300">
+            <div className="mb-3 max-h-48 overflow-auto rounded-2xl border border-border bg-card p-4 shadow-xl animate-in slide-in-from-top-4 duration-300">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm flex items-center gap-2">
                   <ListChecks className="h-4 w-4 text-primary" />
@@ -394,9 +407,9 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
             </div>
           )}
 
-          <div className="bg-card rounded-2xl border border-border shadow-sm min-h-[500px] flex flex-col">
-            <div className="p-6 sm:p-10 flex-1">
-              <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-h-0 flex flex-1 flex-col overflow-auto rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex-1 p-4 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase tracking-tight text-muted-foreground">
                     {DOMAIN_LABELS[cur.data.domain]}
@@ -442,91 +455,18 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
           </div>
           </div>
 
-          <aside className="hidden lg:block">
-            <div className="sticky top-24 space-y-4">
-              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-                <div className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">Exam controls</div>
-                {!isStudyMode ? (
-                  <div className={`mb-4 flex items-center justify-between rounded-xl border px-3 py-3 ${
-                    isWarning10 ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border bg-muted/30'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Time left</span>
-                    </div>
-                    <span className="font-mono text-lg font-black">{timerDisplay}</span>
-                  </div>
-                ) : (
-                  <div className="mb-4 rounded-xl border border-border bg-muted/30 px-3 py-3 text-xs font-bold text-muted-foreground">
-                    Untimed study session
-                  </div>
-                )}
-
-                <div className="mb-4 grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-muted/30 p-3">
-                    <div className="font-mono text-xl font-black">{answeredCount}</div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Answered</div>
-                  </div>
-                  <div className="rounded-xl bg-muted/30 p-3">
-                    <div className="font-mono text-xl font-black">{flags.size}</div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Flagged</div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={toggleFlag}
-                  className={`mb-4 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-black ${
-                    flags.has(qId) ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border bg-background/50 text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  <Flag className={`h-3.5 w-3.5 ${flags.has(qId) ? 'fill-current' : ''}`} />
-                  {flags.has(qId) ? 'Remove flag' : 'Flag question'}
-                </button>
-
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">Question palette</span>
-                  <span className="font-mono text-[10px] text-muted-foreground">{idx + 1}/{questions.length}</span>
-                </div>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {questions.map((q, i) => {
-                    const id = q.data.id;
-                    const answered = q.kind === 'pbq'
-                      ? Boolean(pbqAnswers[id] && (Array.isArray(pbqAnswers[id]) ? pbqAnswers[id].some((a: any) => a !== '') : typeof pbqAnswers[id] === 'object' && Object.keys(pbqAnswers[id]).length > 0))
-                      : mcqAnswers[id] !== undefined;
-                    const flagged = flags.has(id);
-                    return (
-                      <button
-                        key={id}
-                        onClick={() => goTo(i)}
-                        title={q.kind === 'pbq' ? `Q${i + 1} — PBQ` : `Q${i + 1}`}
-                        className={`relative aspect-square rounded-md border text-[10px] font-mono font-black transition-all hover:scale-105 ${
-                          i === idx
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : answered
-                              ? 'border-primary/30 bg-primary/10 text-primary'
-                              : q.kind === 'pbq'
-                                ? 'border-accent/40 bg-accent/5 text-accent'
-                                : 'border-border bg-background/50 text-muted-foreground'
-                        }`}
-                      >
-                        {i + 1}
-                        {flagged && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-warning ring-2 ring-card" />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2 text-[9px] font-semibold text-muted-foreground">
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-primary" /> Current</span>
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm border border-primary/40 bg-primary/10" /> Answered</span>
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm border border-accent/50 bg-accent/10" /> PBQ</span>
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> Flagged</span>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
       </div>
+
+      <button
+        onClick={advanceOrFinish}
+        className="fixed right-0 top-1/2 z-[60] hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
+        aria-label={idx < questions.length - 1 ? 'Next question' : isStudyMode ? 'Finish session' : 'Submit exam'}
+        title={idx < questions.length - 1 ? 'Next question' : isStudyMode ? 'Finish session' : 'Submit exam'}
+      >
+        <span>{idx < questions.length - 1 ? 'Next' : isStudyMode ? 'Finish' : 'Submit'}</span>
+        <ChevronRight className="h-5 w-5" />
+      </button>
 
       {/* Footer Navigation */}
       <div className="bg-card border-t border-border px-4 py-4 sm:px-10 flex items-center justify-between">
@@ -552,15 +492,15 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         {idx < questions.length - 1 ? (
           <button 
             onClick={() => goTo(idx + 1)}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-all shadow-lg group"
+            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-all shadow-lg group md:hidden"
           >
             Next
             <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
           </button>
         ) : (
           <button 
-            onClick={() => !isStudyMode ? setShowConfirmSubmit(true) : onFinish()}
-            className="px-8 py-3 rounded-xl bg-accent text-accent-foreground font-black text-sm hover:opacity-90 shadow-xl animate-pulse transition-all uppercase tracking-widest"
+            onClick={advanceOrFinish}
+            className="px-8 py-3 rounded-xl bg-accent text-accent-foreground font-black text-sm hover:opacity-90 shadow-xl transition-all uppercase tracking-widest md:hidden"
           >
             {isStudyMode ? 'Finish Session' : 'Submit Exam'}
           </button>

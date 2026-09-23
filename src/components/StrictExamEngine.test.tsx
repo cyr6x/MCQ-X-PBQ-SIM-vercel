@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
-import type { PBQuestion } from '@/data/questions';
+import type { MCQuestion, PBQuestion } from '@/data/questions';
 
 vi.mock('@/lib/SettingsContext', () => ({
   useSettings: () => ({
@@ -28,7 +28,32 @@ const pbq: PBQuestion = {
   explanation: 'Allow the required HTTPS flow.',
 };
 
+const mcq: MCQuestion = {
+  id: 'next-mcq',
+  domain: 'D1',
+  objective: '1.1',
+  difficulty: 2,
+  type: 'single',
+  question: 'Which control is the best fit for this test question?',
+  options: ['Control A', 'Control B', 'Control C', 'Control D'],
+  answer: 1,
+  explanation: 'Control B is the keyed answer for this UI test.',
+};
+
 describe('StrictExamEngine training controls', () => {
+  it('keeps the next-question action available at the viewport edge', () => {
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Next question' })).toBeInTheDocument();
+  });
+
   it('hides exam metadata and provides a content-covering pause/resume control', () => {
     render(
       <StrictExamEngine
