@@ -205,7 +205,7 @@ export function PBQPractice({ onFinish }: Props) {
                 <select
                   value={filterDomain}
                   onChange={(event) => setFilterDomain(event.target.value as Domain | 'all')}
-                  className="min-w-0 flex-1 rounded-lg border border-border bg-muted/55 px-3 py-2.5 text-sm"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
                 >
                   <option value="all">All domains</option>
                   {(Object.entries(DOMAIN_LABELS) as [Domain, string][]).map(([domain, label]) => (
@@ -446,7 +446,7 @@ function FilterCard({
       className={`min-h-32 rounded-xl border p-3 text-left transition-colors ${
         active
           ? 'border-primary bg-primary/10'
-          : 'border-border bg-muted/15 hover:border-primary/35 hover:bg-muted/25'
+          : 'border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/25'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
