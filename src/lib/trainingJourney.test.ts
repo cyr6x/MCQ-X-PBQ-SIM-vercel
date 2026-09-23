@@ -9,6 +9,7 @@ import {
 } from '@/data/questions';
 import { buildStrictExamOrder } from '@/lib/strictExamOrder';
 import { calculateScore, getPBQCredit, isMCQCorrect } from '@/lib/examEngine';
+import { SY0701_OBJECTIVE_LABELS } from '@/lib/sy0701Objectives';
 
 function modelPBQAnswer(q: PBQuestion): unknown {
   switch (q.type) {
@@ -62,6 +63,18 @@ describe('full training journey whitebox', () => {
     });
   });
 
+
+  it('covers every official SY0-701 objective with at least three bank items', () => {
+    const all = [...mcqSingle, ...mcqSelectTwo, ...pbqBank];
+    const counts = all.reduce<Record<string, number>>((acc, question) => {
+      if (question.objective) acc[question.objective] = (acc[question.objective] || 0) + 1;
+      return acc;
+    }, {});
+
+    Object.keys(SY0701_OBJECTIVE_LABELS).forEach((objective) => {
+      expect(counts[objective] || 0, `objective ${objective}`).toBeGreaterThanOrEqual(3);
+    });
+  });
 
   it('runs a 90-item mixed form with multiple PBQs, misses, review signals and a strong pass', () => {
     const exam = buildExam(3);
