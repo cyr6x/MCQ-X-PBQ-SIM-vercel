@@ -38,7 +38,7 @@ export default function ExamPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f5f7] text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+    <div className="dark min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-300 bg-slate-900 text-white dark:border-slate-700">
         <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-8">
           <ShieldCheck className="mr-2 h-4 w-4 text-sky-300" />
