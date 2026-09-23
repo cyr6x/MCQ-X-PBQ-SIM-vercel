@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Accessibility, Check, Cloud, Save, Settings as SettingsIcon, Target, Trash2, Zap } from 'lucide-react';
+import { Check, Cloud, Save, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { clearHistory } from '@/lib/examHistory';
 import { DEFAULT_SETTINGS, type UserSettings } from '@/lib/userSettings';
 import { useSettings } from '@/lib/SettingsContext';
@@ -85,10 +85,6 @@ export default function SettingsPage() {
               <option value="exam">Exam — full simulation</option>
             </select>
           </Field>
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/10 p-3 text-[11px] leading-5 text-muted-foreground">
-            <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <span>Confidence-rating configuration is intentionally hidden until confidence is actually captured and analyzed end to end.</span>
-          </div>
         </Panel>
 
         <Panel title="Exam ergonomics" eyebrow="Simulation" description="These controls affect interruption handling and focus—not scoring or content difficulty.">
