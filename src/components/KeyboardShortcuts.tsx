@@ -7,7 +7,7 @@
  * Shortcuts are ignored while typing inside form fields.
  */
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Keyboard } from 'lucide-react';
 
@@ -17,9 +17,16 @@ const ROUTES: Record<string, string> = {
 
 export function KeyboardShortcuts() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
+    // Global trainer shortcuts would let a candidate escape the strict exam
+    // shell, which is the opposite of the test environment being simulated.
+    if (location.pathname === '/exam') {
+      setHelpOpen(false);
+      return;
+    }
     let lastG = 0;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -36,7 +43,7 @@ export function KeyboardShortcuts() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   return (
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
