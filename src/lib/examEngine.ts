@@ -136,6 +136,7 @@ export function calculateScore(
   pbqAnswers: Record<string, any>,
   mcqAnswers: Record<string, number | number[]>,
   startTime: number,
+  pausedMilliseconds = 0,
 ): ScoreResult {
   let rawCorrect = 0;
   const rawTotal = pbqs.length + mcqs.length;
@@ -173,7 +174,7 @@ export function calculateScore(
   // that published range without claiming equivalence to the live score.
   const ratio = rawTotal > 0 ? rawCorrect / rawTotal : 0;
   const scaledScore = Math.round((100 + ratio * 800) / 10) * 10;
-  const timeUsedMinutes = Math.round((Date.now() - startTime) / 60000);
+  const timeUsedMinutes = Math.max(0, Math.round((Date.now() - startTime - pausedMilliseconds) / 60000));
 
   return {
     rawCorrect,
