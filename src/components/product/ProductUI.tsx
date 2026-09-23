@@ -49,7 +49,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={cn('rounded-2xl border border-border/80 bg-card/88 p-4 shadow-sm sm:p-5', className)}>
+    <section className={cn('rounded-2xl border border-border/80 bg-card/90 p-4 shadow-sm sm:p-5', className)}>
       {(title || eyebrow || action) && (
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -103,14 +103,14 @@ export function MetricCard({
     return (
       <button
         onClick={onClick}
-        className="w-full rounded-2xl border border-border/80 bg-card/88 p-4 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/20"
+        className="w-full rounded-2xl border border-border/80 bg-card/90 p-4 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/20"
       >
         {content}
       </button>
     );
   }
 
-  return <div className="rounded-2xl border border-border/80 bg-card/88 p-4 shadow-sm">{content}</div>;
+  return <div className="rounded-2xl border border-border/80 bg-card/90 p-4 shadow-sm">{content}</div>;
 }
 
 export function ProgressMeter({
