@@ -1,7 +1,7 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
-import { Command, CalendarDays, Settings2 } from 'lucide-react';
+import { CalendarDays, Settings2 } from 'lucide-react';
 import { useSettings } from '@/lib/SettingsContext';
 
 const ROUTE_META: Record<string, { title: string; kicker: string }> = {
@@ -60,10 +60,6 @@ export default function AppLayout() {
               >
                 <Settings2 className="h-4 w-4" />
               </button>
-              <span className="hidden items-center gap-1.5 rounded-lg border border-border bg-card/70 px-2.5 py-1.5 text-[10px] font-mono text-muted-foreground lg:inline-flex">
-                <Command className="h-3.5 w-3.5" />
-                ? shortcuts
-              </span>
             </div>
           </header>
           <main className="relative z-10 min-w-0 flex-1">
