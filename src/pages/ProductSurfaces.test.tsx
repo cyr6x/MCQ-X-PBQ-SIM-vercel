@@ -43,8 +43,8 @@ describe('live product surfaces', () => {
   it('renders full exam setup with interruption controls', () => {
     renderPage(<ExamPage />, '/exam');
     expect(screen.getByText('90 questions. 90 minutes. One clean signal.')).toBeInTheDocument();
-    expect(screen.getByText('Exam ergonomics', { exact: false })).not.toBeInTheDocument();
-    expect(screen.getByText('Pause')).toBeInTheDocument();
+    expect(screen.queryByText(/Exam ergonomics/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Pause').length).toBeGreaterThan(0);
   });
 
   it('renders analytics and its readiness breakdown surface', () => {
