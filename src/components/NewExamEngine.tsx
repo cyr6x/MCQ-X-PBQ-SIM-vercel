@@ -9,20 +9,7 @@ import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { saveAttempt, type QuestionAttempt, type ExamAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
-
-type UnifiedQ = { kind: 'pbq'; data: PBQuestion } | { kind: 'mcq'; data: MCQuestion };
-
-/**
- * Study/retest sessions deliberately mix PBQs and MCQs so learners practice
- * switching between formats. Full exam delivery uses StrictExamEngine and its
- * deterministic form-ordering rules instead.
- */
-function arrangeQuestions(pbqs: PBQuestion[], mcqs: MCQuestion[]): UnifiedQ[] {
-  return [
-    ...pbqs.map(data => ({ kind: 'pbq' as const, data })),
-    ...mcqs.map(data => ({ kind: 'mcq' as const, data })),
-  ].sort(() => Math.random() - 0.5);
-}
+import { buildStudyOrder, type StudyQuestion } from '@/lib/studyOrder';
 
 interface NewExamEngineProps {
   pbqs: PBQuestion[];
@@ -37,8 +24,8 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   // Bumped by the Shuffle button to re-randomize question order + MCQ option order.
   const [shuffleNonce, setShuffleNonce] = useState(0);
 
-  const questions = useMemo<UnifiedQ[]>(
-    () => arrangeQuestions(pbqs, mcqs),
+  const questions = useMemo<StudyQuestion[]>(
+    () => buildStudyOrder(pbqs, mcqs),
     // shuffleNonce intentionally requests a fresh mixed order.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pbqs, mcqs, shuffleNonce],
