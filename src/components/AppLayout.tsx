@@ -8,7 +8,7 @@ export default function AppLayout() {
 
   // Exam setup and the live attempt use an isolated shell so trainer navigation,
   // analytics and global chrome cannot leak into the simulated test experience.
-  if (location.pathname === '/exam') {
+  if (location.pathname === '/exam' || location.pathname === '/review') {
     return (
       <div className="min-h-screen bg-background">
         <Outlet />
