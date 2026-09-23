@@ -116,8 +116,8 @@ export default function DashboardPage() {
       {/* Quick actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
         <ActionTile
-          title="Take a Practice Exam"
-          desc="90 questions · 90 minutes · scaled scoring"
+          title="Start Exam Simulation"
+          desc="90 questions · 90 minutes · no pause · final review"
           icon={<Target className="w-5 h-5" />}
           onClick={() => navigate('/exam')}
           accent="primary"
@@ -198,8 +198,8 @@ export default function DashboardPage() {
         {history.length === 0 ? (
           <EmptyState
             title="No attempts yet"
-            body="Take your first practice exam or run through a study set — your scores will appear here."
-            ctaLabel="Start a practice exam"
+            body="Take your first full exam simulation or run through a study set — your scores will appear here."
+            ctaLabel="Start exam simulation"
             onCta={() => navigate('/exam')}
           />
         ) : (

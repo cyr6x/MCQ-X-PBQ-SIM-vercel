@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isMCQCorrect, calculateScore, getPBQCredit } from '@/lib/examEngine';
-import type { MCQuestion, PBQuestion, PBQTerminal, PBQPacketAnalysis, PBQTopology } from '@/data/questions';
+import { buildExam, shuffleOptions, type MCQuestion, type PBQuestion, type PBQTerminal, type PBQPacketAnalysis, type PBQTopology } from '@/data/questions';
 import { advancedPBQs } from '@/data/advancedQuestions';
 
 const single: MCQuestion = {
@@ -68,6 +68,55 @@ describe('examEngine', () => {
     expect(getPBQCredit(topology, topologyAnswers).ratio).toBe(1);
   });
 
+
+  it('keeps distractor rationale attached when options are shuffled', () => {
+    const source: MCQuestion = {
+      id: 'shuffle-rationale',
+      domain: 'D2',
+      type: 'single',
+      difficulty: 3,
+      question: 'Scenario question',
+      options: ['alpha', 'bravo', 'charlie', 'delta'],
+      answer: 1,
+      explanation: 'Bravo is correct.',
+      whyWrong: {
+        0: 'alpha rationale',
+        2: 'charlie rationale',
+        3: 'delta rationale',
+      },
+    };
+
+    const shuffled = shuffleOptions(source);
+    shuffled.options.forEach((option, newIndex) => {
+      const oldIndex = source.options.indexOf(option);
+      expect(shuffled.whyWrong?.[newIndex]).toBe(source.whyWrong?.[oldIndex]);
+    });
+    expect(shuffled.options[shuffled.answer as number]).toBe('bravo');
+  });
+
+  it('builds five strict 90-item forms with weighted domains and variable PBQs', () => {
+    const expected = { D1: 11, D2: 20, D3: 16, D4: 25, D5: 18 };
+
+    ([1, 2, 3, 4, 5] as const).forEach(form => {
+      const exam = buildExam(form);
+      expect(exam.totalQuestions).toBe(90);
+      expect(exam.pbqs.length).toBeGreaterThanOrEqual(4);
+      expect(exam.pbqs.length).toBeLessThanOrEqual(6);
+
+      const all = [...exam.pbqs, ...exam.mcqs];
+      expect(new Set(all.map(q => q.id)).size).toBe(90);
+
+      const domains = all.reduce<Record<string, number>>((acc, q) => {
+        acc[q.domain] = (acc[q.domain] || 0) + 1;
+        return acc;
+      }, {});
+      expect(domains).toEqual(expected);
+
+      const applied = exam.mcqs.filter(q => q.difficulty >= 2 || Boolean(q.evidence?.length)).length;
+      expect(applied / exam.mcqs.length).toBeGreaterThanOrEqual(0.7);
+    });
+  });
+
   it('calculates scaled score on 100-900 scale', () => {
     const r = calculateScore(
       [] as PBQuestion[],
@@ -82,9 +131,14 @@ describe('examEngine', () => {
     expect(r.passed).toBe(true);
   });
 
-  it('fails when below scaled 750', () => {
-    const r = calculateScore([] as PBQuestion[], [single, multi], {}, { m1: 2 }, Date.now());
-    expect(r.scaledScore).toBeLessThan(750);
-    expect(r.passed).toBe(false);
+  it('uses the published 100-900 reporting range for the modeled score', () => {
+    const zero = calculateScore([] as PBQuestion[], [single, multi], {}, {}, Date.now());
+    expect(zero.scaledScore).toBe(100);
+    expect(zero.passed).toBe(false);
+
+    const partial = calculateScore([] as PBQuestion[], [single, multi], {}, { m1: 2 }, Date.now());
+    expect(partial.scaledScore).toBeGreaterThan(100);
+    expect(partial.scaledScore).toBeLessThan(750);
+    expect(partial.passed).toBe(false);
   });
 });

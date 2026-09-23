@@ -16,7 +16,7 @@ const items = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Study Mode', url: '/study', icon: BookOpen },
   { title: 'PBQ Lab', url: '/pbq', icon: Layers },
-  { title: 'Practice Exams', url: '/exam', icon: Target },
+  { title: 'Exam Simulation', url: '/exam', icon: Target },
   { title: 'Review', url: '/review', icon: History },
   { title: 'Analytics', url: '/analytics', icon: BarChart3 },
   { title: 'Settings', url: '/settings', icon: Settings },
