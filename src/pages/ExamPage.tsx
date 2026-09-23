@@ -95,7 +95,7 @@ export default function ExamPage() {
                 className={`rounded-xl border px-3 py-4 text-center transition-colors ${
                   selected === form
                     ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background/45 text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                    : 'border-border bg-background/50 text-muted-foreground hover:border-primary/40 hover:text-foreground'
                 }`}
               >
                 <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">Form</div>
