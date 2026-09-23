@@ -399,109 +399,119 @@ export function StrictExamEngine({
 
   if (!current) return null;
 
+  const openReview = () => {
+    if (isPaused) return;
+    recordCurrentItemTime();
+    setReviewFilter('all');
+    setPhase('review');
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {topBar}
       {isPaused && <PauseOverlay onResume={togglePause} />}
 
       {focusNotice && (
-        <div className="border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs font-medium text-warning">
+        <div className="shrink-0 border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs font-medium text-warning">
           Focus changed while the exam was running. The timer continued.
           <button onClick={() => setFocusNotice(false)} className="ml-3 underline">Dismiss</button>
         </div>
       )}
 
-      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-8">
-        <div className="mb-4 flex items-center justify-between border-b border-border pb-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Question</div>
-            <div className="font-mono text-lg font-semibold">{idx + 1} of {questions.length}</div>
+      <main className="relative min-h-0 flex-1 overflow-hidden">
+        <div className="mx-auto flex h-full max-w-6xl flex-col px-3 py-3 sm:px-6">
+          <div className="mb-3 flex shrink-0 items-center justify-between border-b border-border pb-2.5">
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Question</div>
+              <div className="font-mono text-base font-semibold">{idx + 1} of {questions.length}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleFlag}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                  flags.has(currentId)
+                    ? 'border-warning/50 bg-warning/10 text-warning'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Flag className={`h-4 w-4 ${flags.has(currentId) ? 'fill-current' : ''}`} />
+                <span className="hidden sm:inline">Flag for Review</span>
+                <span className="sm:hidden">Flag</span>
+              </button>
+              <button
+                onClick={openReview}
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <ListChecks className="h-4 w-4" />
+                Review
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <section className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+            {current.kind === 'pbq' ? (
+              <PBQRenderer
+                q={current.data}
+                ans={pbqAnswers[current.data.id]}
+                onAns={answer => setPbqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
+                submitted={false}
+                studyRevealed={false}
+                examMode
+              />
+            ) : (
+              <StrictMCQ
+                q={current.data}
+                answer={mcqAnswers[current.data.id]}
+                onAnswer={answer => setMcqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
+              />
+            )}
+          </section>
+
+          <footer className="mt-3 flex shrink-0 items-center justify-between border-t border-border pt-3">
             <button
-              onClick={toggleFlag}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
-                flags.has(currentId)
-                  ? 'border-warning/50 bg-warning/10 text-warning'
-                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
-              }`}
+              onClick={() => goToQuestion(idx - 1)}
+              disabled={idx === 0}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-30 hover:bg-muted"
             >
-              <Flag className={`h-4 w-4 ${flags.has(currentId) ? 'fill-current' : ''}`} />
-              Flag for Review
+              <ChevronLeft className="h-4 w-4" /> Previous
             </button>
-            <button
-              onClick={() => {
-                if (isPaused) return;
-                recordCurrentItemTime();
-                setReviewFilter('all');
-                setPhase('review');
-              }}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
-            >
-              <ListChecks className="h-4 w-4" />
-              Review
-            </button>
-          </div>
+
+            <div className="hidden text-xs text-muted-foreground sm:block">
+              {focusViolations > 0
+                ? `Focus changes recorded: ${focusViolations}`
+                : settings.exam_pause_enabled
+                  ? 'Pause is available for real-world interruptions'
+                  : 'Exam timer runs continuously'}
+            </div>
+
+            {idx < questions.length - 1 ? (
+              <button
+                onClick={() => goToQuestion(idx + 1)}
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 md:hidden"
+              >
+                Next <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                onClick={openReview}
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 md:hidden"
+              >
+                Review Exam <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+          </footer>
         </div>
 
-        <section className="min-h-[520px] rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8">
-          {current.kind === 'pbq' ? (
-            <PBQRenderer
-              q={current.data}
-              ans={pbqAnswers[current.data.id]}
-              onAns={answer => setPbqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
-              submitted={false}
-              studyRevealed={false}
-              examMode
-            />
-          ) : (
-            <StrictMCQ
-              q={current.data}
-              answer={mcqAnswers[current.data.id]}
-              onAnswer={answer => setMcqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
-            />
-          )}
-        </section>
-
-        <footer className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <button
-            onClick={() => goToQuestion(idx - 1)}
-            disabled={idx === 0}
-            className="flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-semibold disabled:opacity-30 hover:bg-muted"
-          >
-            <ChevronLeft className="h-4 w-4" /> Previous
-          </button>
-
-          <div className="hidden text-xs text-muted-foreground sm:block">
-            {focusViolations > 0
-              ? `Focus changes recorded: ${focusViolations}`
-              : settings.exam_pause_enabled
-                ? 'Pause is available for real-world interruptions'
-                : 'Exam timer runs continuously'}
-          </div>
-
-          {idx < questions.length - 1 ? (
-            <button
-              onClick={() => goToQuestion(idx + 1)}
-              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
-            >
-              Next <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                if (isPaused) return;
-                recordCurrentItemTime();
-                setReviewFilter('all');
-                setPhase('review');
-              }}
-              className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90"
-            >
-              Review Exam <ChevronRight className="h-4 w-4" />
-            </button>
-          )}
-        </footer>
-      </div>
+        <button
+          onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
+          className="fixed right-0 top-1/2 z-50 hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
+          aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
+          title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
+        >
+          <span>{idx < questions.length - 1 ? 'Next' : 'Review'}</span>
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </main>
     </div>
   );
 }
