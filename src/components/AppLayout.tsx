@@ -35,7 +35,7 @@ export default function AppLayout() {
         <AppSidebar />
         <div className="relative flex min-w-0 flex-1 flex-col">
           <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(circle_at_20%_-10%,hsl(var(--primary)/0.08),transparent_32%),radial-gradient(circle_at_100%_0%,hsl(var(--accent)/0.05),transparent_28%)]" />
-          <header className="sticky top-0 z-40 flex min-h-14 items-center gap-3 border-b border-border/75 bg-background/88 px-3 backdrop-blur-xl sm:px-5">
+          <header className="sticky top-0 z-40 flex min-h-14 items-center gap-3 border-b border-border/75 bg-background/90 px-3 backdrop-blur-xl sm:px-5">
             <SidebarTrigger className="shrink-0" />
             <div className="h-5 w-px bg-border" />
             <div className="min-w-0">
