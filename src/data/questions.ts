@@ -1307,22 +1307,29 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 
 // ── Shuffle answer options and remap answer index ────────────────
 export function shuffleOptions(q: MCQuestion): MCQuestion {
+  const original = q.options.map((opt, i) => ({ opt, i }));
+  const shuffled = shuffle(original);
+  const newOptions = shuffled.map(x => x.opt);
+
+  // Distractor rationale is indexed by option position. Keep it attached to the
+  // original option when answers are shuffled or post-exam review can explain
+  // the wrong distractor.
+  const newWhyWrong = q.whyWrong
+    ? Object.fromEntries(
+        shuffled.flatMap((entry, newIndex) =>
+          q.whyWrong?.[entry.i] ? [[newIndex, q.whyWrong[entry.i]]] : [],
+        ),
+      )
+    : undefined;
+
   if (q.type === 'select-two') {
-    // For select-two, shuffle options and remap both answer indices
-    const original = q.options.map((opt, i) => ({ opt, i }));
-    const shuffled = shuffle(original);
-    const newOptions = shuffled.map(x => x.opt);
-    const oldAnswers = (q.answer as number[]);
+    const oldAnswers = q.answer as number[];
     const newAnswers = oldAnswers.map(oldIdx => shuffled.findIndex(x => x.i === oldIdx));
-    return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b) };
-  } else {
-    // Single answer
-    const original = q.options.map((opt, i) => ({ opt, i }));
-    const shuffled = shuffle(original);
-    const newOptions = shuffled.map(x => x.opt);
-    const newAnswer = shuffled.findIndex(x => x.i === (q.answer as number));
-    return { ...q, options: newOptions, answer: newAnswer };
+    return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b), whyWrong: newWhyWrong };
   }
+
+  const newAnswer = shuffled.findIndex(x => x.i === (q.answer as number));
+  return { ...q, options: newOptions, answer: newAnswer, whyWrong: newWhyWrong };
 }
 
 // ── Exam seeds — each number yields a distinct, reproducible pool ─
@@ -1337,19 +1344,27 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
   const seed = EXAM_SEEDS[examNumber];
 
-  // Pick 6 PBQs with a deliberate mix of classic and advanced interaction types.
-  // Each exam includes terminal, packet-analysis and topology work plus three
-  // established PBQ formats so practice covers both knowledge and manipulation.
-  const fwPbqs = seededShuffle(pbqBank.filter(p => p.type === 'firewall'), seed).slice(0, 1);
-  const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 1).slice(0, 1);
-  const classicOther = seededShuffle(
-    pbqBank.filter(p => p.type === 'ordering' || p.type === 'matching' || p.type === 'placement'),
-    seed + 2,
-  ).slice(0, 1);
-  const terminalPbqs = seededShuffle(pbqBank.filter(p => p.type === 'terminal'), seed + 3).slice(0, 1);
-  const packetPbqs = seededShuffle(pbqBank.filter(p => p.type === 'packet-analysis'), seed + 4).slice(0, 1);
-  const topologyPbqs = seededShuffle(pbqBank.filter(p => p.type === 'topology'), seed + 5).slice(0, 1);
-  const pbqs = shuffle([...fwPbqs, ...logPbqs, ...classicOther, ...terminalPbqs, ...packetPbqs, ...topologyPbqs]);
+  // CompTIA publishes that PBQs are present, but not a fixed live-exam PBQ
+  // count. Avoid teaching candidates to expect exactly six every time.
+  const pbqTargetByExam: Record<ExamNumber, number> = { 1: 5, 2: 4, 3: 6, 4: 5, 5: 4 };
+  const pbqTarget = pbqTargetByExam[examNumber];
+  const pbqCandidates = seededShuffle(pbqBank, seed + 700);
+  const pickedPbqs: PBQuestion[] = [];
+  const seenTypes = new Set<PBQuestion['type']>();
+
+  // First pass maximizes interaction variety, then fill from the shuffled pool.
+  for (const candidate of pbqCandidates) {
+    if (pickedPbqs.length >= pbqTarget) break;
+    if (!seenTypes.has(candidate.type)) {
+      pickedPbqs.push(candidate);
+      seenTypes.add(candidate.type);
+    }
+  }
+  for (const candidate of pbqCandidates) {
+    if (pickedPbqs.length >= pbqTarget) break;
+    if (!pickedPbqs.some(p => p.id === candidate.id)) pickedPbqs.push(candidate);
+  }
+  const pbqs = pickedPbqs;
 
   // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
   // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).
@@ -1389,19 +1404,40 @@ export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
 
   for (const [domain, count] of Object.entries(domainCounts) as [Domain, number][]) {
     if (count <= 0) continue;
-    const domainSingle    = seededShuffle(mcqSingle.filter(q => q.domain === domain), seed + domain.charCodeAt(1));
-    const domainSelectTwo = seededShuffle(selectTwoByDomain[domain],                  seed + domain.charCodeAt(1) + 50);
+    const domainSingleAll = mcqSingle.filter(q => q.domain === domain);
+    const domainSelectTwo = seededShuffle(selectTwoByDomain[domain], seed + domain.charCodeAt(1) + 50);
 
-    // Up to 2 select-two per domain (capped at the domain's MCQ count)
+    // Up to 2 select-two per domain (capped at the domain's MCQ count).
     const stPicked = domainSelectTwo.slice(0, Math.min(2, count, domainSelectTwo.length));
     stPicked.forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
 
-    // Fill remaining with single-answer
+    // Full simulations should bias toward applied/scenario items instead of
+    // becoming a vocabulary quiz. CompTIA does not publish a difficulty mix,
+    // so this is a calibration choice, not a claim about proprietary weighting.
     const remaining = count - stPicked.length;
-    domainSingle
+    const appliedTarget = Math.min(
+      remaining,
+      Math.ceil(remaining * 0.8),
+    );
+    const applied = seededShuffle(
+      domainSingleAll.filter(q => q.difficulty >= 2 || Boolean(q.evidence?.length)),
+      seed + domain.charCodeAt(1),
+    )
       .filter(q => !usedIds.has(q.id))
-      .slice(0, remaining)
-      .forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
+      .slice(0, appliedTarget);
+
+    const appliedIds = new Set(applied.map(q => q.id));
+    const foundation = seededShuffle(
+      domainSingleAll.filter(q => !appliedIds.has(q.id)),
+      seed + domain.charCodeAt(1) + 100,
+    )
+      .filter(q => !usedIds.has(q.id))
+      .slice(0, remaining - applied.length);
+
+    [...applied, ...foundation].forEach(q => {
+      selectedMCQ.push(shuffleOptions(q));
+      usedIds.add(q.id);
+    });
   }
 
 
