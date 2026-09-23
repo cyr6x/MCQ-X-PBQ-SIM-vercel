@@ -139,7 +139,7 @@ export default function AnalyticsPage() {
         <Panel className="mt-4" title="What to do next" eyebrow="Recommendations">
           <div className="grid gap-2 lg:grid-cols-2">
             {progress.readiness.recommendations.map((recommendation) => (
-              <div key={recommendation} className="rounded-xl border border-border bg-muted/20 p-3 text-xs leading-5 text-foreground/85">
+              <div key={recommendation} className="rounded-xl border border-border bg-muted/20 p-3 text-xs leading-5 text-foreground/80">
                 <span className="mr-2 font-mono text-primary">→</span>{recommendation}
               </div>
             ))}
