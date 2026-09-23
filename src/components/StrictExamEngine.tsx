@@ -7,10 +7,7 @@ import { DOMAIN_LABELS } from '@/data/questions';
 import { PBQRenderer } from '@/components/PBQRenderer';
 import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { ExamResults } from '@/components/ExamResults';
-
-type UnifiedQuestion =
-  | { kind: 'pbq'; data: PBQuestion }
-  | { kind: 'mcq'; data: MCQuestion };
+import { buildStrictExamOrder } from '@/lib/strictExamOrder';
 
 type ReviewFilter = 'all' | 'incomplete' | 'flagged';
 
@@ -41,12 +38,9 @@ export function StrictExamEngine({
   examNumber = 1,
   onFinish,
 }: StrictExamEngineProps) {
-  const questions = useMemo<UnifiedQuestion[]>(
-    () => [
-      ...pbqs.map(data => ({ kind: 'pbq' as const, data })),
-      ...mcqs.map(data => ({ kind: 'mcq' as const, data })),
-    ],
-    [pbqs, mcqs],
+  const questions = useMemo(
+    () => buildStrictExamOrder(pbqs, mcqs, examNumber),
+    [pbqs, mcqs, examNumber],
   );
 
   const [idx, setIdx] = useState(0);
@@ -70,7 +64,7 @@ export function StrictExamEngine({
   const currentId = current?.data.id;
 
   const isAnswered = useCallback(
-    (question: UnifiedQuestion) =>
+    (question: ReturnType<typeof buildStrictExamOrder>[number]) =>
       question.kind === 'pbq'
         ? pbqAttempted(pbqAnswers[question.data.id])
         : mcqAttempted(mcqAnswers[question.data.id]),
@@ -223,6 +217,7 @@ export function StrictExamEngine({
 
   if (phase === 'submitted' && scoreResult) {
     return (
+      <div className="dark min-h-screen bg-slate-950 text-slate-100">
       <ExamResults
         score={scoreResult}
         pbqs={pbqs}
@@ -237,6 +232,7 @@ export function StrictExamEngine({
           onFinish();
         }}
       />
+      </div>
     );
   }
 
@@ -250,7 +246,7 @@ export function StrictExamEngine({
       });
 
     return (
-      <div className="min-h-screen bg-[#f4f5f7] text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+      <div className="dark min-h-screen bg-slate-950 text-slate-100">
         <ExamTopBar timerDisplay={timerDisplay} examNumber={examNumber} />
         <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
           <section className="overflow-hidden rounded-sm border border-slate-300 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -328,7 +324,7 @@ export function StrictExamEngine({
   if (!current) return null;
 
   return (
-    <div className="min-h-screen bg-[#f4f5f7] text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+    <div className="dark min-h-screen bg-slate-950 text-slate-100">
       <ExamTopBar timerDisplay={timerDisplay} examNumber={examNumber} />
 
       {focusNotice && (
@@ -378,6 +374,7 @@ export function StrictExamEngine({
               onAns={answer => setPbqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
               submitted={false}
               studyRevealed={false}
+              examMode
             />
           ) : (
             <StrictMCQ

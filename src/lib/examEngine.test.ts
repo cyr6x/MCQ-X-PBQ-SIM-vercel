@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isMCQCorrect, calculateScore, getPBQCredit } from '@/lib/examEngine';
 import { buildExam, shuffleOptions, type MCQuestion, type PBQuestion, type PBQTerminal, type PBQPacketAnalysis, type PBQTopology } from '@/data/questions';
 import { advancedPBQs } from '@/data/advancedQuestions';
+import { buildStrictExamOrder } from '@/lib/strictExamOrder';
 
 const single: MCQuestion = {
   id: 'm1', domain: 'D1', type: 'single', difficulty: 1,
@@ -114,6 +115,35 @@ describe('examEngine', () => {
 
       const applied = exam.mcqs.filter(q => q.difficulty >= 2 || Boolean(q.evidence?.length)).length;
       expect(applied / exam.mcqs.length).toBeGreaterThanOrEqual(0.7);
+    });
+  });
+
+  it('distributes PBQs throughout each strict form instead of front-loading them', () => {
+    ([1, 2, 3, 4, 5] as const).forEach(form => {
+      const exam = buildExam(form);
+      const ordered = buildStrictExamOrder(exam.pbqs, exam.mcqs, form);
+      const positions = ordered
+        .map((item, index) => item.kind === 'pbq' ? index : -1)
+        .filter(index => index >= 0);
+
+      expect(ordered).toHaveLength(90);
+      expect(positions).toHaveLength(exam.pbqs.length);
+      expect(positions.some(index => index < 30)).toBe(true);
+      expect(positions.some(index => index >= 30 && index < 60)).toBe(true);
+      expect(positions.some(index => index >= 60)).toBe(true);
+      expect(positions).not.toEqual([...Array(exam.pbqs.length).keys()]);
+    });
+  });
+
+  it('keeps full forms challenging but not artificially hard', () => {
+    ([1, 2, 3, 4, 5] as const).forEach(form => {
+      const exam = buildExam(form);
+      const all = [...exam.pbqs, ...exam.mcqs];
+      const hard = all.filter(question => question.difficulty === 3).length;
+      const medium = all.filter(question => question.difficulty === 2).length;
+
+      expect(hard / all.length).toBeLessThanOrEqual(0.25);
+      expect(medium / all.length).toBeGreaterThanOrEqual(0.5);
     });
   });
 

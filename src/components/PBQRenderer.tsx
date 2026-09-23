@@ -18,6 +18,7 @@ export function PBQRenderer({
   submitted,
   studyRevealed,
   compact = false,
+  examMode = false,
 }: {
   q: PBQuestion;
   ans: any;
@@ -25,6 +26,7 @@ export function PBQRenderer({
   submitted: boolean;
   studyRevealed: boolean;
   compact?: boolean;
+  examMode?: boolean;
 }) {
   const showFeedback = submitted || studyRevealed;
   const typeLabel = {
@@ -43,19 +45,25 @@ export function PBQRenderer({
       <div className={compact ? 'space-y-4' : 'grid gap-5 lg:grid-cols-[minmax(240px,0.72fr)_minmax(0,1.55fr)]'}>
         <aside className={`rounded-2xl border border-border bg-muted/20 ${compact ? 'p-4' : 'p-5 lg:sticky lg:top-24 lg:self-start'}`}>
           <div className="mb-4 flex flex-wrap gap-2">
-            <span className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-accent">
-              {typeLabel}
-            </span>
-            <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
-              Difficulty {q.difficulty}/3
-            </span>
+            {!examMode && (
+              <>
+                <span className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-accent">
+                  {typeLabel}
+                </span>
+                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                  Difficulty {q.difficulty}/3
+                </span>
+              </>
+            )}
           </div>
           <h3 className={`font-bold leading-snug ${compact ? 'text-base' : 'text-xl'}`}>{q.title}</h3>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{q.scenario}</p>
-          <div className="mt-5 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">
-            <div className="font-mono font-bold text-foreground">Objective {q.objective || '—'}</div>
-            <div>{objectiveLabel(q.objective)}</div>
-          </div>
+          {!examMode && (
+            <div className="mt-5 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">
+              <div className="font-mono font-bold text-foreground">Objective {q.objective || '—'}</div>
+              <div>{objectiveLabel(q.objective)}</div>
+            </div>
+          )}
         </aside>
 
         <section className={`min-w-0 rounded-2xl border border-border bg-background/30 ${compact ? 'p-3' : 'p-4 sm:p-5'}`}>
