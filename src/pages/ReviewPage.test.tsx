@@ -51,11 +51,11 @@ describe('failed-question review workflow', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Review failed questions')).toBeInTheDocument();
+    expect(screen.getByText('Turn misses into closed loops.')).toBeInTheDocument();
     expect(screen.getByText('Needs Review (2)')).toBeInTheDocument();
-    expect(screen.getByText('PBQs Missed')).toBeInTheDocument();
+    expect(screen.getByText(/PBQs missed/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /retry needs review/i }));
-    expect(screen.getByText(/Question/i)).toBeInTheDocument();
+    expect(screen.getByTitle('Question navigator')).toBeInTheDocument();
   });
 });

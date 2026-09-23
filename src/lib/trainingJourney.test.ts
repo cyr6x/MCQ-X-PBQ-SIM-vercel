@@ -10,6 +10,7 @@ import {
 import { buildStrictExamOrder } from '@/lib/strictExamOrder';
 import { calculateScore, getPBQCredit, isMCQCorrect } from '@/lib/examEngine';
 import { SY0701_OBJECTIVE_LABELS } from '@/lib/sy0701Objectives';
+import { buildStudyOrder } from '@/lib/studyOrder';
 
 function modelPBQAnswer(q: PBQuestion): unknown {
   switch (q.type) {
@@ -74,6 +75,23 @@ describe('full training journey whitebox', () => {
     Object.keys(SY0701_OBJECTIVE_LABELS).forEach((objective) => {
       expect(counts[objective] || 0, `objective ${objective}`).toBeGreaterThanOrEqual(3);
     });
+  });
+
+  it('spaces PBQs through mixed study drills instead of front-loading them', () => {
+    const exam = buildExam(2);
+    const pbqs = exam.pbqs.slice(0, 3);
+    const mcqs = exam.mcqs.slice(0, 20);
+    const ordered = buildStudyOrder(pbqs, mcqs);
+    const positions = ordered
+      .map((item, index) => item.kind === 'pbq' ? index : -1)
+      .filter((index) => index >= 0);
+
+    expect(ordered).toHaveLength(23);
+    expect(positions).toHaveLength(3);
+    expect(positions[0]).toBeGreaterThan(0);
+    expect(positions[2]).toBeLessThan(22);
+    expect(positions[0]).toBeLessThan(positions[1]);
+    expect(positions[1]).toBeLessThan(positions[2]);
   });
 
   it('runs a 90-item mixed form with multiple PBQs, misses, review signals and a strong pass', () => {

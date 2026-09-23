@@ -9,20 +9,7 @@ import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { saveAttempt, type QuestionAttempt, type ExamAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
-
-type UnifiedQ = { kind: 'pbq'; data: PBQuestion } | { kind: 'mcq'; data: MCQuestion };
-
-/**
- * Keep PBQs at the front, then MCQs. This more closely resembles commonly
- * reported Pearson VUE / CompTIA delivery while preserving normal flagging and
- * review navigation throughout the attempt.
- */
-function arrangeQuestions(pbqs: PBQuestion[], mcqs: MCQuestion[]): UnifiedQ[] {
-  return [
-    ...pbqs.map(data => ({ kind: 'pbq' as const, data })),
-    ...mcqs.map(data => ({ kind: 'mcq' as const, data })),
-  ];
-}
+import { buildStudyOrder, type StudyQuestion } from '@/lib/studyOrder';
 
 interface NewExamEngineProps {
   pbqs: PBQuestion[];
@@ -37,14 +24,12 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   // Bumped by the Shuffle button to re-randomize question order + MCQ option order.
   const [shuffleNonce, setShuffleNonce] = useState(0);
 
-  // Shuffle within question families, then present PBQs first. PBQs remain
-  // reviewable and flaggable like other exam items.
-  const questions = useMemo<UnifiedQ[]>(() => {
-    const shuffledMcqs = [...mcqs].sort(() => Math.random() - 0.5);
-    const shuffledPbqs = [...pbqs].sort(() => Math.random() - 0.5);
-    return arrangeQuestions(shuffledPbqs, shuffledMcqs);
+  const questions = useMemo<StudyQuestion[]>(
+    () => buildStudyOrder(pbqs, mcqs),
+    // shuffleNonce intentionally requests a fresh mixed order.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pbqs, mcqs, shuffleNonce]);
+    [pbqs, mcqs, shuffleNonce],
+  );
 
   const pbqCount = pbqs.length;
 
@@ -151,6 +136,12 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const unansweredCount = questions.length - answeredCount;
 
   const handleSubmit = useCallback(() => {
+    const finalQuestionTimes = { ...questionTimes };
+    if (!isPaused && qId) {
+      const currentElapsed = Math.max(0, Math.floor((Date.now() - qStartTime) / 1000));
+      finalQuestionTimes[qId] = (finalQuestionTimes[qId] || 0) + currentElapsed;
+    }
+
     const result = calculateScore(pbqs, mcqs, pbqAnswers, mcqAnswers, startTime);
     setScoreResult(result);
     setSubmitted(true);
@@ -168,7 +159,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: JSON.stringify(pbqAnswers[q.id] || {}),
         correctAnswer: '',
         explanation: q.explanation,
-        timeSpentSeconds: questionTimes[q.id] || 0,
+        timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),
       })),
       ...mcqs.map(q => ({
@@ -180,7 +171,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: mcqAnswers[q.id] !== undefined ? String(mcqAnswers[q.id]) : 'Not answered',
         correctAnswer: String(q.answer),
         explanation: q.explanation,
-        timeSpentSeconds: questionTimes[q.id] || 0,
+        timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),
       })),
     ];
@@ -202,7 +193,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
       questions: attemptQs,
       domainScores,
     });
-  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, startTime, questionTimes, isStudyMode]);
+  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, startTime, questionTimes, isStudyMode, isPaused, qId, qStartTime]);
 
   const goTo = (newIdx: number) => {
     if (isPaused) return;
@@ -388,7 +379,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
                       title={isPBQ ? `Q${i + 1} — Performance-Based` : `Q${i + 1}`}
                       className={`relative aspect-square rounded-lg text-xs font-mono font-black transition-all ${
                         i === idx ? 'bg-primary text-primary-foreground scale-110 shadow-lg z-10' :
-                        answered ? (isPBQ ? 'bg-accent/15 text-accent border-2 border-accent/40' : 'bg-primary/10 text-primary border-2 border-primary/20') :
+                        answered ? (isPBQ ? 'bg-accent/20 text-accent border-2 border-accent/40' : 'bg-primary/10 text-primary border-2 border-primary/20') :
                         isPBQ ? 'bg-card text-foreground border-2 border-accent/40 hover:border-accent' :
                         'bg-card text-muted-foreground border border-border hover:border-primary/50'
                       }`}
@@ -403,7 +394,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
             </div>
           )}
 
-          <div className="bg-card rounded-3xl border border-border shadow-sm min-h-[500px] flex flex-col">
+          <div className="bg-card rounded-2xl border border-border shadow-sm min-h-[500px] flex flex-col">
             <div className="p-6 sm:p-10 flex-1">
               <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">

@@ -1,216 +1,247 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Trash2, Cloud, Save, Check } from 'lucide-react';
+import { Check, Cloud, Save, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { clearHistory } from '@/lib/examHistory';
-import { deviceId } from '@/integrations/supabase/deviceClient';
 import { DEFAULT_SETTINGS, type UserSettings } from '@/lib/userSettings';
 import { useSettings } from '@/lib/SettingsContext';
 import { toast } from 'sonner';
+import { PageHeader, Panel, StatusChip } from '@/components/product/ProductUI';
 
 export default function SettingsPage() {
   const { settings, update, loaded } = useSettings();
-  const [s, setS] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [draft, setDraft] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  useEffect(() => { if (loaded) setS(settings); }, [loaded, settings]);
+  useEffect(() => {
+    if (loaded) setDraft(settings);
+  }, [loaded, settings]);
 
-  const updateField = <K extends keyof UserSettings>(k: K, v: UserSettings[K]) => setS((p) => ({ ...p, [k]: v }));
+  const updateField = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
+    setDraft((previous) => ({ ...previous, [key]: value }));
+  };
 
   const onSave = async () => {
     setSaving(true);
-    await update(s);
-    setSaving(false);
-    setSavedAt(Date.now());
-    toast.success('Settings saved');
-    setTimeout(() => setSavedAt(null), 2000);
+    try {
+      await update(draft);
+      setSavedAt(Date.now());
+      toast.success('Training settings saved');
+      window.setTimeout(() => setSavedAt(null), 2000);
+    } catch {
+      toast.error('Settings could not be saved');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl">
-      <div className="flex items-center gap-2 mb-6">
-        <SettingsIcon className="w-5 h-5" />
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <button
-          onClick={onSave}
-          disabled={saving}
-          className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-primary text-primary-foreground font-semibold hover:opacity-90 disabled:opacity-50"
-        >
-          {savedAt ? <><Check className="w-3.5 h-3.5" /> Saved</> : <><Save className="w-3.5 h-3.5" /> {saving ? 'Saving…' : 'Save changes'}</>}
-        </button>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <PageHeader
+        eyebrow="Training controls"
+        title="Tune the trainer, not the exam standard."
+        description="These preferences change your study workflow and simulator ergonomics. Full exam forms remain 90 questions / 90 minutes with the same domain weighting."
+        icon={<SettingsIcon className="h-4 w-4" />}
+        actions={
+          <button
+            onClick={onSave}
+            disabled={saving || !loaded}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-45"
+          >
+            {savedAt ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+            {savedAt ? 'Saved' : saving ? 'Saving…' : 'Save changes'}
+          </button>
+        }
+      />
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Panel title="Training goals" eyebrow="Progress" description="Dashboard goal meters use these values directly.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Daily active minutes">
+              <NumberInput min={5} max={240} value={draft.daily_minutes_goal} onChange={(value) => updateField('daily_minutes_goal', value)} />
+            </Field>
+            <Field label="Weekly question target">
+              <NumberInput min={10} max={1000} value={draft.weekly_question_target} onChange={(value) => updateField('weekly_question_target', value)} />
+            </Field>
+            <Field label="Target exam date" className="sm:col-span-2">
+              <input
+                type="date"
+                value={draft.target_exam_date ?? ''}
+                onChange={(event) => updateField('target_exam_date', event.target.value || null)}
+                className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
+              />
+            </Field>
+          </div>
+        </Panel>
+
+        <Panel title="Quick-start behavior" eyebrow="Defaults" description="Your default mode powers the Dashboard quick-start action.">
+          <Field label="Default training mode">
+            <select
+              value={draft.default_mode}
+              onChange={(event) => updateField('default_mode', event.target.value as UserSettings['default_mode'])}
+              className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
+            >
+              <option value="tutor">Tutor — feedback-first learning</option>
+              <option value="sprint">Sprint — configured quick set</option>
+              <option value="exam">Exam — full simulation</option>
+            </select>
+          </Field>
+        </Panel>
+
+        <Panel title="Exam ergonomics" eyebrow="Simulation" description="These controls affect interruption handling and focus—not scoring or content difficulty.">
+          <div className="space-y-2">
+            <ToggleRow
+              label="Allow interruption pause"
+              help="Covers the active question and stops both countdown and per-question timing."
+              checked={draft.exam_pause_enabled}
+              onChange={(value) => updateField('exam_pause_enabled', value)}
+            />
+            <ToggleRow
+              label="Auto fullscreen on exam start"
+              help="Requests browser fullscreen when a full form begins."
+              checked={draft.exam_auto_fullscreen}
+              onChange={(value) => updateField('exam_auto_fullscreen', value)}
+            />
+            <ToggleRow
+              label="Focus-change notice"
+              help="Records focus changes while the exam is running; paused sessions are ignored."
+              checked={draft.exam_focus_notice}
+              onChange={(value) => updateField('exam_focus_notice', value)}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Field label="Amber warning · seconds">
+              <NumberInput min={60} max={5400} value={draft.amber_threshold_seconds} onChange={(value) => updateField('amber_threshold_seconds', value)} />
+            </Field>
+            <Field label="Red warning · seconds">
+              <NumberInput min={30} max={1800} value={draft.red_threshold_seconds} onChange={(value) => updateField('red_threshold_seconds', value)} />
+            </Field>
+          </div>
+        </Panel>
+
+        <Panel title="Training set sizes" eyebrow="Practice" description="These values only affect drills; full exam simulations remain fixed.">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Sprint">
+              <NumberInput min={10} max={60} value={draft.sprint_question_count} onChange={(value) => updateField('sprint_question_count', value)} />
+            </Field>
+            <Field label="Random drill">
+              <NumberInput min={10} max={100} value={draft.random_question_count} onChange={(value) => updateField('random_question_count', value)} />
+            </Field>
+            <Field label="PBQ Lab">
+              <NumberInput min={1} max={25} value={draft.pbq_set_size} onChange={(value) => updateField('pbq_set_size', value)} />
+            </Field>
+          </div>
+        </Panel>
+
+        <Panel title="Accessibility" eyebrow="Interface" description="Applied globally through the shared Settings provider.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Font size">
+              <select
+                value={draft.font_size}
+                onChange={(event) => updateField('font_size', event.target.value as UserSettings['font_size'])}
+                className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
+              >
+                <option value="small">Small</option>
+                <option value="normal">Normal</option>
+                <option value="large">Large</option>
+              </select>
+            </Field>
+            <div className="flex items-end">
+              <ToggleRow
+                label="Reduce motion"
+                help="Disables nonessential transitions and animations."
+                checked={draft.reduce_motion}
+                onChange={(value) => updateField('reduce_motion', value)}
+                compact
+              />
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Anonymous cloud backup" eyebrow="Data" description="Attempts and settings are written to device-scoped Supabase rows protected by row-level security.">
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3">
+            <Cloud className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+            <div className="text-[11px] leading-5 text-muted-foreground">
+              Progress remains local-first. The browser identity used for backup is not displayed because it also participates in data access control. Clearing browser storage can create a new anonymous identity; there is no account recovery flow.
+            </div>
+          </div>
+        </Panel>
       </div>
 
-      <Section title="Study goals">
-        <Field label="Daily minutes goal">
-          <input type="number" min={5} max={240} value={s.daily_minutes_goal}
-            onChange={(e) => updateField('daily_minutes_goal', Number(e.target.value))}
-            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-        </Field>
-        <Field label="Weekly question target">
-          <input type="number" min={10} max={1000} value={s.weekly_question_target}
-            onChange={(e) => updateField('weekly_question_target', Number(e.target.value))}
-            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-        </Field>
-        <Field label="Target exam date">
-          <input type="date" value={s.target_exam_date ?? ''}
-            onChange={(e) => updateField('target_exam_date', e.target.value || null)}
-            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-        </Field>
-      </Section>
-
-      <Section title="Exam preferences">
-        <Field label="Default mode">
-          <select value={s.default_mode}
-            onChange={(e) => updateField('default_mode', e.target.value as UserSettings['default_mode'])}
-            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md">
-            <option value="tutor">Tutor — instant feedback</option>
-            <option value="sprint">Sprint — 30 questions, fast</option>
-            <option value="exam">Exam — 90 questions, timed</option>
-          </select>
-        </Field>
-        <Field label="Confidence rating">
-          <select value={s.confidence_required}
-            onChange={(e) => updateField('confidence_required', e.target.value as UserSettings['confidence_required'])}
-            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md">
-            <option value="off">Off</option>
-            <option value="optional">Optional</option>
-            <option value="required">Required per question</option>
-          </select>
-        </Field>
-        <ToggleRow
-          label="Allow interruption pause"
-          help="Stops the exam timer and covers the question until you resume."
-          checked={s.exam_pause_enabled}
-          onChange={(value) => updateField('exam_pause_enabled', value)}
-        />
-        <ToggleRow
-          label="Auto fullscreen on exam start"
-          help="Useful for dedicated mock sessions; leave off when multitasking."
-          checked={s.exam_auto_fullscreen}
-          onChange={(value) => updateField('exam_auto_fullscreen', value)}
-        />
-        <ToggleRow
-          label="Focus-change notice"
-          help="Records when the active exam tab loses focus unless the exam is paused."
-          checked={s.exam_focus_notice}
-          onChange={(value) => updateField('exam_focus_notice', value)}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Amber timer threshold (s)">
-            <input type="number" min={60} max={5400} value={s.amber_threshold_seconds}
-              onChange={(e) => updateField('amber_threshold_seconds', Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-          </Field>
-          <Field label="Red timer threshold (s)">
-            <input type="number" min={30} max={1800} value={s.red_threshold_seconds}
-              onChange={(e) => updateField('red_threshold_seconds', Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-          </Field>
+      <Panel className="mt-4 border-destructive/30" title="Danger zone" eyebrow="Local data">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Clear local training history</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Removes local exam history and question stats. Cloud backup rows are not deleted by this action.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              if (confirm('Clear all local exam history and question stats? This cannot be undone locally.')) {
+                clearHistory();
+                toast.success('Local training history cleared');
+              }
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-xs font-semibold text-destructive-foreground hover:opacity-90"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear local history
+          </button>
         </div>
-      </Section>
-
-      <Section title="Training set sizes">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Field label="Sprint questions">
-            <input type="number" min={10} max={60} value={s.sprint_question_count}
-              onChange={(e) => updateField('sprint_question_count', Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-          </Field>
-          <Field label="Random drill questions">
-            <input type="number" min={10} max={100} value={s.random_question_count}
-              onChange={(e) => updateField('random_question_count', Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-          </Field>
-          <Field label="PBQ lab set size">
-            <input type="number" min={1} max={25} value={s.pbq_set_size}
-              onChange={(e) => updateField('pbq_set_size', Number(e.target.value))}
-              className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md" />
-          </Field>
-        </div>
-        <p className="text-[11px] leading-5 text-muted-foreground">
-          Full exam simulations stay at 90 questions / 90 minutes. These controls only change training drills.
-        </p>
-      </Section>
-
-      <Section title="Accessibility">
-        <Field label="Font size">
-          <select value={s.font_size}
-            onChange={(e) => updateField('font_size', e.target.value as UserSettings['font_size'])}
-            className="w-full px-3 py-2 text-sm bg-muted border border-border rounded-md">
-            <option value="small">Small</option>
-            <option value="normal">Normal</option>
-            <option value="large">Large</option>
-          </select>
-        </Field>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={s.reduce_motion}
-            onChange={(e) => updateField('reduce_motion', e.target.checked)}
-            className="w-4 h-4" />
-          Reduce motion (disables animations)
-        </label>
-      </Section>
-
-      <section className="rounded-xl border border-border bg-card p-5 mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Cloud className="w-4 h-4 text-success" />
-          <h2 className="text-sm font-semibold">Cloud sync</h2>
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">
-          Your progress is stored anonymously under this device identity. Save this ID to access your data from another browser — there is no password recovery.
-        </p>
-        <div className="bg-muted rounded-md px-3 py-2 font-mono text-xs break-all select-all">{deviceId}</div>
-      </section>
-
-      <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-5">
-        <h2 className="text-sm font-semibold mb-2 text-destructive">Danger zone</h2>
-        <p className="text-xs text-muted-foreground mb-3">
-          Permanently delete all local exam history and question stats on this device.
-        </p>
-        <button
-          onClick={() => {
-            if (confirm('Clear all local exam history and stats? This cannot be undone.')) {
-              clearHistory();
-              window.location.reload();
-            }
-          }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-destructive text-destructive-foreground font-semibold hover:opacity-90"
-        >
-          <Trash2 className="w-3.5 h-3.5" /> Clear local history
-        </button>
-      </section>
+      </Panel>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className="rounded-xl border border-border bg-card p-5 mb-4 space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-xs font-mono uppercase text-muted-foreground mb-1 block">{label}</span>
+    <label className={className}>
+      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
       {children}
     </label>
   );
 }
 
-function ToggleRow({ label, help, checked, onChange }: { label: string; help: string; checked: boolean; onChange: (value: boolean) => void }) {
+function NumberInput({ min, max, value, onChange }: { min: number; max: number; value: number; onChange: (value: number) => void }) {
   return (
-    <label className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/20 px-3 py-3 cursor-pointer">
+    <input
+      type="number"
+      min={min}
+      max={max}
+      value={value}
+      onChange={(event) => {
+        const parsed = Number(event.target.value);
+        if (Number.isFinite(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+      }}
+      className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
+    />
+  );
+}
+
+function ToggleRow({
+  label,
+  help,
+  checked,
+  onChange,
+  compact = false,
+}: {
+  label: string;
+  help: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  compact?: boolean;
+}) {
+  return (
+    <label className={`flex w-full cursor-pointer items-start justify-between gap-4 rounded-xl border border-border bg-muted/20 ${compact ? 'px-3 py-2.5' : 'px-3 py-3'}`}>
       <span>
-        <span className="block text-sm font-semibold">{label}</span>
-        <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">{help}</span>
+        <span className="block text-xs font-semibold">{label}</span>
+        <span className="mt-0.5 block text-[10px] leading-4 text-muted-foreground">{help}</span>
       </span>
       <input
         type="checkbox"
         checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 shrink-0 accent-current"
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
       />
     </label>
   );

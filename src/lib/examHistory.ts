@@ -48,6 +48,13 @@ export interface QuestionStats {
 
 const HISTORY_KEY = 'secplus-exam-history';
 const STATS_KEY = 'secplus-question-stats';
+export const PROGRESS_EVENT = 'secplus-progress-changed';
+
+function notifyProgressChanged(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PROGRESS_EVENT));
+  }
+}
 
 export function loadHistory(): ExamAttempt[] {
   try {
@@ -62,6 +69,7 @@ export function saveAttempt(attempt: ExamAttempt): void {
   if (history.length > 100) history.length = 100;
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   const updatedStats = updateQuestionStats(attempt.questions);
+  notifyProgressChanged();
   // Fire-and-forget cloud sync (dynamic import keeps tests / SSR-safe paths clean)
   import('./cloudSync').then(({ pushExamAttempt, upsertQuestionStat }) => {
     pushExamAttempt(attempt);
@@ -153,4 +161,5 @@ export function getMissedQuestions(filter?: {
 export function clearHistory(): void {
   localStorage.removeItem(HISTORY_KEY);
   localStorage.removeItem(STATS_KEY);
+  notifyProgressChanged();
 }

@@ -320,7 +320,7 @@ export function StrictExamEngine({
         {isPaused && <PauseOverlay onResume={togglePause} />}
         <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
           <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            <div className="border-b border-border bg-muted/35 px-5 py-3">
+            <div className="border-b border-border bg-muted/40 px-5 py-3">
               <h1 className="text-base font-semibold">Item Review</h1>
             </div>
 
@@ -526,7 +526,7 @@ function ExamTopBar({
       ? 'border-destructive/40 bg-destructive/10 text-destructive'
       : timerTone === 'warning'
         ? 'border-warning/40 bg-warning/10 text-warning'
-        : 'border-border bg-muted/35 text-foreground';
+        : 'border-border bg-muted/40 text-foreground';
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur-xl">
@@ -627,7 +627,7 @@ function StrictMCQ({
               className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm leading-6 transition-all ${
                 selected
                   ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
-                  : 'border-border bg-background/35 hover:border-primary/40 hover:bg-muted/30'
+                  : 'border-border bg-background/40 hover:border-primary/40 hover:bg-muted/30'
               }`}
             >
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${
