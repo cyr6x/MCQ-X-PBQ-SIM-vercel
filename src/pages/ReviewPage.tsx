@@ -183,7 +183,7 @@ export default function ReviewPage() {
                   : pbqById.get(stat.questionId)?.scenario;
 
               return (
-                <article key={stat.questionId} className="overflow-hidden rounded-2xl border border-border/80 bg-card/88 shadow-sm">
+                <article key={stat.questionId} className="overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-sm">
                   <button
                     onClick={() => toggle(stat.questionId)}
                     className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/25 sm:px-5"
@@ -226,7 +226,7 @@ export default function ReviewPage() {
                           </section>
                         </div>
 
-                        <aside className="rounded-xl border border-border bg-background/45 p-4">
+                        <aside className="rounded-xl border border-border bg-background/50 p-4">
                           <div className="space-y-2 text-xs">
                             <Row label="Attempts" value={String(stat.timesAttempted)} />
                             <Row label="Failed" value={String(stat.timesFailed)} valueClass="text-destructive" />
@@ -235,7 +235,7 @@ export default function ReviewPage() {
                           </div>
                           <button
                             onClick={() => retry([stat])}
-                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/15"
+                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/20"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                             Retest this item
