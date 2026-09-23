@@ -136,6 +136,12 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const unansweredCount = questions.length - answeredCount;
 
   const handleSubmit = useCallback(() => {
+    const finalQuestionTimes = { ...questionTimes };
+    if (!isPaused && qId) {
+      const currentElapsed = Math.max(0, Math.floor((Date.now() - qStartTime) / 1000));
+      finalQuestionTimes[qId] = (finalQuestionTimes[qId] || 0) + currentElapsed;
+    }
+
     const result = calculateScore(pbqs, mcqs, pbqAnswers, mcqAnswers, startTime);
     setScoreResult(result);
     setSubmitted(true);
@@ -153,7 +159,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: JSON.stringify(pbqAnswers[q.id] || {}),
         correctAnswer: '',
         explanation: q.explanation,
-        timeSpentSeconds: questionTimes[q.id] || 0,
+        timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),
       })),
       ...mcqs.map(q => ({
@@ -165,7 +171,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: mcqAnswers[q.id] !== undefined ? String(mcqAnswers[q.id]) : 'Not answered',
         correctAnswer: String(q.answer),
         explanation: q.explanation,
-        timeSpentSeconds: questionTimes[q.id] || 0,
+        timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),
       })),
     ];
@@ -187,7 +193,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
       questions: attemptQs,
       domainScores,
     });
-  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, startTime, questionTimes, isStudyMode]);
+  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, startTime, questionTimes, isStudyMode, isPaused, qId, qStartTime]);
 
   const goTo = (newIdx: number) => {
     if (isPaused) return;
