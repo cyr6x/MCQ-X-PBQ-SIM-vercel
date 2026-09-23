@@ -85,7 +85,7 @@ export default function SettingsPage() {
               <option value="exam">Exam — full simulation</option>
             </select>
           </Field>
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/8 p-3 text-[11px] leading-5 text-muted-foreground">
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/10 p-3 text-[11px] leading-5 text-muted-foreground">
             <Zap className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>Confidence-rating configuration is intentionally hidden until confidence is actually captured and analyzed end to end.</span>
           </div>
