@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:exam": "vitest run src/lib/examEngine.test.ts src/lib/trainingJourney.test.ts src/components/StrictExamEngine.test.tsx src/pages/ReviewPage.test.tsx src/lib/userSettings.test.ts"
+    "test:exam": "vitest run src/lib/examEngine.test.ts src/lib/trainingJourney.test.ts src/components/StrictExamEngine.test.tsx src/pages/ReviewPage.test.tsx src/lib/userSettings.test.ts src/lib/progressPersistence.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
