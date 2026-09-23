@@ -213,7 +213,10 @@ function NumberInput({ min, max, value, onChange }: { min: number; max: number; 
       min={min}
       max={max}
       value={value}
-      onChange={(event) => onChange(Number(event.target.value))}
+      onChange={(event) => {
+        const parsed = Number(event.target.value);
+        if (Number.isFinite(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+      }}
       className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2.5 text-sm"
     />
   );
