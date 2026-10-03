@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
-import { hasExamSession, loadExamSession, EXAM_END_EVENT } from '@/lib/examSession';
+import { hasExamSession, loadExamSession } from '@/lib/examSession';
+import { mcqSingle, mcqSelectTwo } from '@/data/questions';
 import { loadHistory } from '@/lib/examHistory';
 
 vi.mock('@/lib/SettingsContext', () => ({
@@ -55,7 +56,7 @@ describe('StrictExamEngine training controls', () => {
     expect(screen.getByRole('button', { name: 'Next question' })).toBeInTheDocument();
   });
 
-  it('hides exam metadata and offers NO pause — the clock cannot be stopped', () => {
+  it('hides exam metadata and provides a content-covering pause/resume control', () => {
     render(
       <StrictExamEngine
         pbqs={[pbq]}
@@ -68,15 +69,17 @@ describe('StrictExamEngine training controls', () => {
     expect(screen.queryByText(/Difficulty 3/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Objective 4\.1/i)).not.toBeInTheDocument();
 
-    // No pause control anywhere, and the copy says so.
-    expect(screen.queryByRole('button', { name: /pause/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /pause/i }));
+    expect(screen.getByText('Exam paused')).toBeInTheDocument();
+    expect(screen.getByText(/countdown and question timer are stopped/i)).toBeInTheDocument();
+    expect(screen.getByText(/exam stays saved/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
     expect(screen.queryByText('Exam paused')).not.toBeInTheDocument();
-    expect(screen.getByText(/timer cannot be paused/i)).toBeInTheDocument();
   });
 
-  it('counts down continuously from the wall clock', () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'Date'] });
-    vi.setSystemTime(new Date('2026-01-01T10:00:00Z'));
+  it('counts down each second, and pausing freezes the clock', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     try {
       render(
         <StrictExamEngine
@@ -88,11 +91,25 @@ describe('StrictExamEngine training controls', () => {
       );
       expect(screen.getByText('90:00')).toBeInTheDocument();
 
-      // 2 minutes pass — the timer must drop by exactly 2 minutes.
+      // 2 minutes pass — the countdown drops by exactly 2 minutes.
       act(() => {
         vi.advanceTimersByTime(2 * 60 * 1000);
       });
       expect(screen.getByText('88:00')).toBeInTheDocument();
+
+      // Paused: 5 more minutes pass and the clock must NOT move.
+      fireEvent.click(screen.getByRole('button', { name: /pause/i }));
+      act(() => {
+        vi.advanceTimersByTime(5 * 60 * 1000);
+      });
+      expect(screen.getByText('88:00')).toBeInTheDocument();
+
+      // Resumed: the countdown continues from where it froze.
+      fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
+      act(() => {
+        vi.advanceTimersByTime(60 * 1000);
+      });
+      expect(screen.getByText('87:00')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -159,12 +176,12 @@ describe('StrictExamEngine session persistence', () => {
     expect(saved!.mcqAnswers[mcq.id]).toBe(1);
     expect(saved!.questions).toHaveLength(2);
 
-    // The clock kept running while away: started 10 min ago → 80:00 left.
+    // Time away does NOT burn the clock: the saved countdown is restored
+    // exactly, and a session saved as paused resumes paused (frozen timer).
     const resumed = {
       ...saved!,
-      startedAt: Date.now() - 10 * 60 * 1000,
-      durationSeconds: 90 * 60,
-      remainingSeconds: 80 * 60,
+      remainingSeconds: 10 * 60,
+      isPaused: true,
     };
     render(
       <StrictExamEngine
@@ -176,49 +193,43 @@ describe('StrictExamEngine session persistence', () => {
       />
     );
 
-    expect(screen.getByText('80:00')).toBeInTheDocument();
+    expect(screen.getByText('10:00')).toBeInTheDocument();
+    expect(screen.getByText('Exam paused')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
     expect(screen.queryByText('Exam paused')).not.toBeInTheDocument();
   });
 
-  it('auto-submits on resume when the time ran out while away', () => {
-    const expiredSession = {
-      version: 3 as const,
-      examNumber: 1 as const,
-      savedAt: Date.now() - 2 * 60 * 60 * 1000,
-      startedAt: Date.now() - 95 * 60 * 1000,
-      durationSeconds: 90 * 60,
-      remainingSeconds: 0,
-      phase: 'item' as const,
-      idx: 0,
-      flags: [],
-      mcqAnswers: { [mcq.id]: 1 },
-      pbqAnswers: {},
-      questions: [
-        { kind: 'mcq' as const, data: mcq },
-        { kind: 'pbq' as const, data: pbq },
-      ],
-    };
+  it('auto-submits the LATEST answers when the countdown reaches zero', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      render(
+        <StrictExamEngine
+          pbqs={[pbq]}
+          mcqs={[mcq]}
+          durationMinutes={90}
+          onFinish={() => {}}
+        />
+      );
 
-    render(
-      <StrictExamEngine
-        pbqs={[pbq]}
-        mcqs={[mcq]}
-        durationMinutes={90}
-        initialSession={expiredSession}
-        onFinish={() => {}}
-      />
-    );
+      // Answer, then let the full 90 minutes elapse.
+      fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+      act(() => {
+        vi.advanceTimersByTime(90 * 60 * 1000);
+      });
 
-    // Expired on arrival: submitted immediately, attempt saved, session cleared.
-    expect(hasExamSession()).toBe(false);
-    const history = loadHistory();
-    const attempt = history[history.length - 1];
-    expect(attempt).toBeDefined();
-    expect(attempt.questions.find(q => q.questionId === mcq.id)?.userAnswer).toBe(`B. ${mcq.options[1]}`);
+      expect(hasExamSession()).toBe(false);
+      const history = loadHistory();
+      const attempt = history[history.length - 1];
+      expect(attempt).toBeDefined();
+      // The stale-closure bug used to submit the EMPTY answers from mount.
+      expect(attempt.questions.find(q => q.questionId === mcq.id)?.userAnswer).toBe(`B. ${mcq.options[1]}`);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('ends the exam (submits as-is) when navigation away is confirmed', () => {
-    render(
+  it('leaving (unmount) keeps the exam SAVED and resumable — never ends it', () => {
+    const { unmount } = render(
       <StrictExamEngine
         pbqs={[pbq]}
         mcqs={[mcq]}
@@ -228,17 +239,15 @@ describe('StrictExamEngine session persistence', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+    fireEvent.click(screen.getByRole('button', { name: /pause/i }));
+    unmount();
 
-    // The navigation guard (e.g. hitting Settings) ends the exam via this event.
-    window.dispatchEvent(new CustomEvent(EXAM_END_EVENT));
-
-    expect(hasExamSession()).toBe(false);
-    const history = loadHistory();
-    const attempt = history[history.length - 1];
-    expect(attempt).toBeDefined();
-    // Submitted with the answers given so far.
-    expect(attempt.questions.find(q => q.questionId === mcq.id)?.userAnswer).toBe(`B. ${mcq.options[1]}`);
-    expect(attempt.questions.find(q => q.questionId === pbq.id)?.userAnswer).toBe('Not answered');
+    // Hitting Settings and coming back must find the attempt intact.
+    const saved = loadExamSession();
+    expect(saved).not.toBeNull();
+    expect(saved!.mcqAnswers[mcq.id]).toBe(1);
+    expect(saved!.isPaused).toBe(true);
+    expect(saved!.remainingSeconds).toBe(90 * 60);
   });
 
   it('scrolls back to the top of the question panel on every question change', () => {
@@ -289,6 +298,43 @@ describe('StrictExamEngine session persistence', () => {
     expect(mcqAttempt?.userAnswer).toBe(`B. ${mcq.options[1]}`);
     expect(pbqAttempt?.userAnswer).toBe('Rule actions: ALLOW');
     expect(pbqAttempt?.correctAnswer).toBe('Rule actions: ALLOW');
+  });
+
+  it('REAL regression: the insurance THREE question accepts exactly its 3 correct options', () => {
+    const s128 = [...mcqSingle, ...mcqSelectTwo].find(q => q.id === 's128');
+    if (!s128) throw new Error('s128 missing from bank');
+
+    render(
+      <StrictExamEngine
+        pbqs={[]}
+        mcqs={[s128]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Select exactly three')).toBeInTheDocument();
+    expect(screen.getByText(/Which THREE/i)).toBeInTheDocument();
+
+    // The three keyed controls are selectable.
+    fireEvent.click(screen.getByRole('button', { name: /IP\/GPS login restrictions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Consolidate logs on SIEM/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Time-of-day restrictions/ }));
+    // The 4th selection is silently ignored (cap = 3, not 1, not 2).
+    fireEvent.click(screen.getByRole('button', { name: /Add password complexity/ }));
+
+    // Submitting scores exactly three answers on the saved attempt.
+    fireEvent.click(screen.getAllByRole('button', { name: /review exam/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'End Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'End Exam' }));
+
+    const history = loadHistory();
+    const attempt = history[history.length - 1];
+    const saved = attempt.questions.find(q => q.questionId === 's128');
+    expect(saved?.isCorrect).toBe(true);
+    expect(saved?.userAnswer).toContain('IP/GPS login restrictions');
+    expect(saved?.userAnswer).toContain('Consolidate logs on SIEM');
+    expect(saved?.userAnswer).toContain('Time-of-day restrictions');
   });
 
   it('masks the PBQ title until results are shown', () => {

@@ -25,8 +25,9 @@ const queryClient = new QueryClient();
 
 /**
  * Single navigation guard for live sessions:
- *  - Exam in progress: leaving ENDS the exam (submitted as-is) — the user is
- *    asked once, like stepping out of the testing room. Covers the Settings
+ *  - Exam in progress: the user is asked once; leaving NEVER ends the exam —
+ *    it is saved (answers, flags, remaining time, pause state) and resumable
+ *    from the Exams page, so they can always go back. Covers the Settings
  *    link, every other nav target, keyboard shortcuts, the browser back
  *    button and manual URL changes alike.
  *  - Study / PBQ practice in progress: the user is warned the session is lost.

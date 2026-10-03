@@ -7,7 +7,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Link, Outlet, createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LeaveGuard } from './App';
-import { setExamActive, setStudyActive, EXAM_END_EVENT } from '@/lib/examSession';
+import { setExamActive, setStudyActive } from '@/lib/examSession';
 
 function renderHarness() {
   const router = createMemoryRouter(
@@ -53,39 +53,31 @@ describe('LeaveGuard (settings ends exam)', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it('asks, then ENDS the exam and navigates when confirmed', async () => {
-    const endListener = vi.fn();
-    window.addEventListener(EXAM_END_EVENT, endListener);
+  it('asks once, then navigates while the exam stays SAVED and resumable', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     setExamActive(true);
 
     renderHarness();
     fireEvent.click(screen.getByText('go to settings'));
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('END the exam'));
-    expect(endListener).toHaveBeenCalledTimes(1);
+    // The copy must promise resumability — leaving never ends the exam.
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('saved automatically'));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('resume'));
     await waitFor(() => expect(screen.getByText('SETTINGS SURFACE')).toBeInTheDocument());
-    window.removeEventListener(EXAM_END_EVENT, endListener);
   });
 
-  it('keeps the exam running when the user backs out of leaving', async () => {
-    const endListener = vi.fn();
-    window.addEventListener(EXAM_END_EVENT, endListener);
+  it('keeps the exam on screen when the user backs out of leaving', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     setExamActive(true);
 
     renderHarness();
     fireEvent.click(screen.getByText('go to settings'));
 
-    expect(endListener).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('EXAM SURFACE')).toBeInTheDocument());
     expect(screen.queryByText('SETTINGS SURFACE')).not.toBeInTheDocument();
-    window.removeEventListener(EXAM_END_EVENT, endListener);
   });
 
   it('warns (without ending anything) for a study session', async () => {
-    const endListener = vi.fn();
-    window.addEventListener(EXAM_END_EVENT, endListener);
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     setStudyActive(true);
 
@@ -93,8 +85,6 @@ describe('LeaveGuard (settings ends exam)', () => {
     fireEvent.click(screen.getByText('go to settings'));
 
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('practice session'));
-    expect(endListener).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText('EXAM SURFACE')).toBeInTheDocument());
-    window.removeEventListener(EXAM_END_EVENT, endListener);
   });
 });

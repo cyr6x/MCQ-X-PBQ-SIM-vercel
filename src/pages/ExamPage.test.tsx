@@ -18,12 +18,13 @@ vi.mock('@/lib/cloudSync', () => ({
 
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
-    version: 3 as const,
+    version: 4 as const,
     examNumber: 3 as const,
     savedAt: Date.now() - 5 * 60 * 1000,
     startedAt: Date.now() - 10 * 60 * 1000,
     durationSeconds: 90 * 60,
     remainingSeconds: 80 * 60,
+    isPaused: false,
     phase: 'item' as const,
     idx: 0,
     flags: [],
@@ -54,9 +55,9 @@ describe('ExamPage resume', () => {
     renderPage();
 
     expect(screen.getByText('Form 3 in progress')).toBeInTheDocument();
-    // 10 of 90 minutes burned while away — the card shows the honest number.
+    // The saved countdown is shown frozen — time away does not burn it.
     expect(screen.getByText('80:00 left')).toBeInTheDocument();
-    expect(screen.getByText(/clock keeps running/i)).toBeInTheDocument();
+    expect(screen.getByText(/saved where you left it/i)).toBeInTheDocument();
   });
 
   it('resumes into the saved exam', () => {

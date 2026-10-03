@@ -6,6 +6,8 @@ import {
   Clock,
   Flag,
   ListChecks,
+  Pause,
+  Play,
   ShieldCheck,
 } from 'lucide-react';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
@@ -21,7 +23,6 @@ import {
   saveExamSession,
   clearExamSession,
   setExamActive,
-  EXAM_END_EVENT,
   type ExamSessionSnapshot,
 } from '@/lib/examSession';
 
@@ -89,15 +90,17 @@ export function StrictExamEngine({
   const startedAtRef = useRef(initialSession?.startedAt ?? Date.now());
   const durationSeconds = initialSession?.durationSeconds ?? durationMinutes * 60;
 
-  // Remaining time is always derived from the wall clock, so a restored
-  // session resumes with whatever time is actually left (time away burned).
-  const [remaining, setRemaining] = useState<number>(() =>
-    Math.max(0, durationSeconds - Math.floor((Date.now() - startedAtRef.current) / 1000)),
+  // Countdown state is the single source of truth for the clock: pausing
+  // freezes it, restoring a session seeds it, and time away (refresh,
+  // Settings, closed tab) leaves the saved value frozen until resume.
+  const [remaining, setRemaining] = useState<number>(
+    initialSession ? Math.max(0, initialSession.remainingSeconds) : durationSeconds,
   );
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [focusNotice, setFocusNotice] = useState(false);
   const [focusViolations, setFocusViolations] = useState(0);
+  const [isPaused, setIsPaused] = useState(Boolean(initialSession?.isPaused));
 
   const timeByQuestionRef = useRef<Record<string, number>>({});
   const activeItemRef = useRef<{ id: string; startedAt: number } | null>(null);
@@ -112,18 +115,19 @@ export function StrictExamEngine({
 
   const sessionDoneRef = useRef(false);
   const itemPanelRef = useRef<HTMLElement | null>(null);
-  const stateRef = useRef({ idx, phase, mcqAnswers, pbqAnswers, flags, remaining });
+  const stateRef = useRef({ idx, phase, mcqAnswers, pbqAnswers, flags, remaining, isPaused });
   useEffect(() => {
-    stateRef.current = { idx, phase, mcqAnswers, pbqAnswers, flags, remaining };
+    stateRef.current = { idx, phase, mcqAnswers, pbqAnswers, flags, remaining, isPaused };
   });
 
   const buildSnapshot = useCallback((): ExamSessionSnapshot => ({
-    version: 3,
+    version: 4,
     examNumber: initialSession?.examNumber ?? examNumber,
     savedAt: Date.now(),
     startedAt: startedAtRef.current,
     durationSeconds,
     remainingSeconds: stateRef.current.remaining,
+    isPaused: stateRef.current.isPaused,
     phase: stateRef.current.phase === 'review' ? 'review' : 'item',
     idx: stateRef.current.idx,
     flags: [...stateRef.current.flags],
@@ -141,7 +145,7 @@ export function StrictExamEngine({
   // are covered by the periodic safety-net saves below.)
   useEffect(() => {
     saveSessionNow();
-  }, [idx, phase, mcqAnswers, pbqAnswers, flags, saveSessionNow]);
+  }, [idx, phase, mcqAnswers, pbqAnswers, flags, isPaused, saveSessionNow]);
 
   // Safety net: periodic saves + save when the tab is hidden or unloaded.
   useEffect(() => {
@@ -185,11 +189,24 @@ export function StrictExamEngine({
   }, []);
 
   useEffect(() => {
-    if (phase !== 'item' || !currentId) return;
+    if (phase !== 'item' || !currentId || isPaused) return;
     activeItemRef.current = { id: currentId, startedAt: Date.now() };
     return () => recordCurrentItemTime();
-  }, [currentId, phase, recordCurrentItemTime]);
+  }, [currentId, phase, isPaused, recordCurrentItemTime]);
 
+
+  // Pause covers the active question and stops both the countdown and the
+  // per-question timer. Always available: a saved paused session also resumes
+  // paused (timer frozen where it was left).
+  const togglePause = useCallback(() => {
+    if (phase === 'submitted') return;
+    if (isPaused) {
+      setIsPaused(false);
+      return;
+    }
+    recordCurrentItemTime();
+    setIsPaused(true);
+  }, [isPaused, phase, recordCurrentItemTime]);
 
   const finishExam = useCallback(() => {
     if (submittedRef.current) return;
@@ -260,6 +277,7 @@ export function StrictExamEngine({
 
     setScoreResult(result);
     setShowEndConfirm(false);
+    setIsPaused(false);
     setPhase('submitted');
   }, [
     durationSeconds,
@@ -276,32 +294,20 @@ export function StrictExamEngine({
   const finishExamRef = useRef(finishExam);
   useEffect(() => { finishExamRef.current = finishExam; }, [finishExam]);
 
-  // Unstoppable wall-clock countdown: recompute from the anchor every second
-  // so the timer can never be paused, frozen or drifted — refreshing, leaving
-  // and returning all burn real time, like the testing room.
+  // Pure countdown: pause freezes it, restoring a session seeds it, and an
+  // accidental exit leaves the saved value frozen until resume.
   const expired = remaining <= 0;
   useEffect(() => {
-    if (phase === 'submitted' || expired) return;
-    const timer = window.setInterval(() => {
-      setRemaining(Math.max(0, durationSeconds - Math.floor((Date.now() - startedAtRef.current) / 1000)));
-    }, 1000);
+    if (phase === 'submitted' || isPaused || expired) return;
+    const timer = window.setInterval(() => setRemaining(value => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [phase, expired, durationSeconds]);
+  }, [isPaused, phase, expired]);
 
-  // Auto-submit on expiry — including immediately on resume of a session whose
-  // time ran out while the user was away.
+  // Auto-submit the LATEST answers on expiry (ref avoids the stale-closure
+  // bug where 0:00 submitted the answers captured at mount).
   useEffect(() => {
     if (phase !== 'submitted' && expired) finishExamRef.current();
   }, [expired, phase]);
-
-  // Deliberate navigation away (e.g. hitting Settings) ENDS the exam: the
-  // guard in examSession confirms with the user, then requests the end here
-  // so the attempt is submitted with the answers given so far.
-  useEffect(() => {
-    const endExam = () => finishExamRef.current();
-    window.addEventListener(EXAM_END_EVENT, endExam);
-    return () => window.removeEventListener(EXAM_END_EVENT, endExam);
-  }, []);
 
   useEffect(() => {
     if (phase === 'submitted') return;
@@ -313,7 +319,7 @@ export function StrictExamEngine({
 
     let wasHidden = false;
     const visibility = () => {
-      if (!settings.exam_focus_notice) return;
+      if (!settings.exam_focus_notice || isPaused) return;
       if (document.hidden) {
         wasHidden = true;
         setFocusViolations(count => count + 1);
@@ -329,7 +335,7 @@ export function StrictExamEngine({
       window.removeEventListener('beforeunload', beforeUnload);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [phase, settings.exam_focus_notice]);
+  }, [isPaused, phase, settings.exam_focus_notice]);
 
   const timerDisplay = `${String(Math.floor(remaining / 60)).padStart(2, '0')}:${String(remaining % 60).padStart(2, '0')}`;
   const timerTone =
@@ -340,7 +346,7 @@ export function StrictExamEngine({
         : 'normal';
 
   const goToQuestion = (nextIndex: number) => {
-    if (nextIndex < 0 || nextIndex >= questions.length) return;
+    if (isPaused || nextIndex < 0 || nextIndex >= questions.length) return;
     recordCurrentItemTime();
     setIdx(nextIndex);
     setPhase('item');
@@ -352,7 +358,7 @@ export function StrictExamEngine({
   }, [idx]);
 
   const toggleFlag = () => {
-    if (!currentId) return;
+    if (!currentId || isPaused) return;
     setFlags(previous => {
       const next = new Set(previous);
       if (next.has(currentId)) next.delete(currentId);
@@ -387,6 +393,8 @@ export function StrictExamEngine({
       timerDisplay={timerDisplay}
       examNumber={examNumber}
       timerTone={timerTone}
+      isPaused={isPaused}
+      onPause={togglePause}
     />
   );
 
@@ -402,6 +410,7 @@ export function StrictExamEngine({
     return (
       <div className="min-h-screen bg-background text-foreground">
         {topBar}
+        {isPaused && <PauseOverlay onResume={togglePause} />}
           <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
           <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="border-b border-border bg-muted/40 px-5 py-3">
@@ -484,6 +493,7 @@ export function StrictExamEngine({
   if (!current) return null;
 
   const openReview = () => {
+    if (isPaused) return;
     recordCurrentItemTime();
     setReviewFilter('all');
     setPhase('review');
@@ -492,6 +502,7 @@ export function StrictExamEngine({
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {topBar}
+      {isPaused && <PauseOverlay onResume={togglePause} />}
 
       {focusNotice && (
         <div className="shrink-0 border-b border-warning/30 bg-warning/10 px-4 py-2 text-center text-xs font-medium text-warning">
@@ -563,7 +574,7 @@ export function StrictExamEngine({
             <div className="hidden text-xs text-muted-foreground sm:block">
               {focusViolations > 0
                 ? `Focus changes recorded: ${focusViolations}`
-                : 'The timer cannot be paused, like the real exam'}
+                : 'Pause stops the clock — the exam saves itself if you leave'}
             </div>
 
             {idx < questions.length - 1 ? (
@@ -602,10 +613,14 @@ function ExamTopBar({
   timerDisplay,
   examNumber,
   timerTone,
+  isPaused,
+  onPause,
 }: {
   timerDisplay: string;
   examNumber: number;
   timerTone: 'normal' | 'warning' | 'destructive';
+  isPaused: boolean;
+  onPause: () => void;
 }) {
   const timerClass =
     timerTone === 'destructive'
@@ -626,6 +641,13 @@ function ExamTopBar({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={onPause}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+          </button>
           <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
             <Clock className="h-4 w-4" />
             <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>
@@ -634,6 +656,32 @@ function ExamTopBar({
         </div>
       </div>
     </header>
+  );
+}
+
+function PauseOverlay({ onResume }: { onResume: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-4 backdrop-blur-xl">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-2xl">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Pause className="h-7 w-7" />
+        </div>
+        <h2 className="text-xl font-bold">Exam paused</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          The countdown and question timer are stopped, and the active question is covered until you resume.
+        </p>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          If you leave this page, the exam stays saved — resume any time from the Exams page with the timer frozen where you left it.
+        </p>
+        <button
+          onClick={onResume}
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+        >
+          <Play className="h-4 w-4" />
+          Resume exam
+        </button>
+      </div>
+    </div>
   );
 }
 
