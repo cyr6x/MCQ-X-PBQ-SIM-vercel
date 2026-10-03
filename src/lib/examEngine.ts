@@ -3,7 +3,9 @@
  */
 
 import type { MCQuestion, PBQuestion, Domain } from '@/data/questions';
-import { DOMAIN_LABELS } from '@/data/questions';
+import { DOMAIN_LABELS, selectionCount } from '@/data/questions';
+
+export { selectionCount };
 
 export interface ExamState {
   mcqAnswers: Record<string, number | number[]>;
@@ -77,11 +79,15 @@ export function getPBQCredit(q: PBQuestion, ans: any): PBQCredit {
       break;
     case 'log-analysis': {
       total = 3;
-      const a = ans as { attackType?: string; sourceIP?: string; response?: number };
+      const a = ans as { attackType?: string; sourceIP?: string; response?: string | number };
+      // `response` is stored as the option TEXT (not an index) so shuffled
+      // response lists stay score-safe across renders and persisted sessions.
+      const correctResponse = q.responseOptions[q.correctResponse];
+      const userResponse = typeof a?.response === 'number' ? q.responseOptions[a.response] : a?.response;
       earned =
         (a.attackType === q.correctAttackType ? 1 : 0) +
         (a.sourceIP === q.correctSourceIP ? 1 : 0) +
-        (a.response === q.correctResponse ? 1 : 0);
+        (userResponse === correctResponse ? 1 : 0);
       break;
     }
     case 'matching':
@@ -119,6 +125,109 @@ export function getPBQCredit(q: PBQuestion, ans: any): PBQCredit {
 
 export function isPBQCorrect(q: PBQuestion, ans: any): boolean {
   return getPBQCredit(q, ans).ratio === 1;
+}
+
+/* =================================================================
+   Readable answer text — used for exam history / review screens so
+   a stored attempt can be understood without the interactive widget.
+   ================================================================= */
+
+const NOT_ANSWERED = 'Not answered';
+const letter = (i: number) => String.fromCharCode(65 + i);
+
+export function mcqAnswerText(q: MCQuestion, ans: number | number[] | undefined): string {
+  if (ans === undefined || (Array.isArray(ans) && ans.length === 0)) return NOT_ANSWERED;
+  const idxs = Array.isArray(ans) ? ans : [ans];
+  return idxs.map(i => `${letter(i)}. ${q.options[i] ?? '—'}`).join('  |  ');
+}
+
+export function pbqAnswerText(q: PBQuestion, ans: unknown): string {
+  if (ans === undefined || ans === null) return NOT_ANSWERED;
+  switch (q.type) {
+    case 'firewall':
+      return Array.isArray(ans) && ans.some((a: string) => a !== '')
+        ? `Rule actions: ${ans.join(', ')}`
+        : NOT_ANSWERED;
+    case 'ordering':
+      return Array.isArray(ans) && ans.length > 0
+        ? ans.map((s: string, i: number) => `${i + 1}. ${s}`).join('  →  ')
+        : NOT_ANSWERED;
+    case 'log-analysis': {
+      const a = ans as { attackType?: string; sourceIP?: string; response?: string | number };
+      const response = typeof a?.response === 'number' ? q.responseOptions[a.response] : a?.response;
+      if (!a?.attackType && !a?.sourceIP && !response) return NOT_ANSWERED;
+      return [
+        `Attack: ${a.attackType || '—'}`,
+        `Source: ${a.sourceIP || '—'}`,
+        `Response: ${response || '—'}`,
+      ].join('  |  ');
+    }
+    case 'packet-analysis': {
+      const a = ans as { packetIds?: string[]; attackType?: string; response?: number };
+      if (!a?.packetIds?.length && !a?.attackType && a?.response === undefined) return NOT_ANSWERED;
+      return [
+        `Packets: ${(a.packetIds || []).join(', ') || '—'}`,
+        `Attack: ${a.attackType || '—'}`,
+        `Response: ${a.response !== undefined ? q.responseOptions[a.response] : '—'}`,
+      ].join('  |  ');
+    }
+    case 'terminal': {
+      if (!Array.isArray(ans) || ans.length === 0) return NOT_ANSWERED;
+      return q.tasks.map((task, i) => `Task ${i + 1}: ${task.options[ans[i]] ?? '—'}`).join('  |  ');
+    }
+    case 'matching': {
+      const a = ans as Record<string, string>;
+      if (Object.keys(a || {}).length === 0) return NOT_ANSWERED;
+      return q.items.map(it => `${it.left} → ${a[it.left] || '—'}`).join('  |  ');
+    }
+    case 'placement': {
+      const a = ans as Record<string, string>;
+      if (Object.keys(a || {}).length === 0) return NOT_ANSWERED;
+      return q.items.map(it => `${it.label} → ${a[it.label] || '—'}`).join('  |  ');
+    }
+    case 'topology': {
+      const a = ans as Record<string, string>;
+      if (Object.keys(a || {}).length === 0) return NOT_ANSWERED;
+      return q.nodes.map(node => `${node.label} → ${a[node.id] || '—'}`).join('  |  ');
+    }
+    default:
+      return NOT_ANSWERED;
+  }
+}
+
+/** The model (correct) answer for a PBQ, in the same readable format. */
+export function pbqCorrectText(q: PBQuestion): string {
+  switch (q.type) {
+    case 'firewall':
+      return `Rule actions: ${q.correctActions.join(', ')}`;
+    case 'ordering':
+      return [...q.steps]
+        .sort((a, b) => a.correctPosition - b.correctPosition)
+        .map((s, i) => `${i + 1}. ${s.label}`)
+        .join('  →  ');
+    case 'log-analysis':
+      return [
+        `Attack: ${q.correctAttackType}`,
+        `Source: ${q.correctSourceIP}`,
+        `Response: ${q.responseOptions[q.correctResponse]}`,
+      ].join('  |  ');
+    case 'packet-analysis':
+      return [
+        `Packets: ${q.suspiciousPacketIds.join(', ')}`,
+        `Attack: ${q.correctAttackType}`,
+        `Response: ${q.responseOptions[q.correctResponse]}`,
+      ].join('  |  ');
+    case 'terminal':
+      return q.tasks.map((task, i) => `Task ${i + 1}: ${task.options[task.correctIndex]}`).join('  |  ');
+    case 'matching':
+      return q.items.map(it => `${it.left} → ${it.correctRight}`).join('  |  ');
+    case 'placement':
+      return q.items.map(it => `${it.label} → ${it.correctZone}`).join('  |  ');
+    case 'topology':
+      return q.nodes.map(node => `${node.label} → ${node.correctZone}`).join('  |  ');
+    default:
+      return '—';
+  }
 }
 
 export interface ScoreResult {

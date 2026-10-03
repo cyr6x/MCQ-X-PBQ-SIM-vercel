@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, XCircle, GripVertical, ListChecks, MousePointer2 } from 'lucide-react';
 import type { PBQuestion, PBQFirewall, PBQOrdering, PBQLogAnalysis, PBQMatching, PBQPlacement, PBQTerminal, PBQPacketAnalysis, PBQTopology } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
@@ -39,6 +39,10 @@ export function PBQRenderer({
     'packet-analysis': 'Packet analysis',
     topology: 'Network topology',
   }[q.type];
+  // Bank titles like "MFA Push-Bombing Attempt" literally give the answer away.
+  // Show a neutral heading during the attempt; reveal the real title only once
+  // feedback is shown (reveal / submit / results).
+  const displayTitle = showFeedback ? q.title : 'Performance-Based Question';
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -56,7 +60,7 @@ export function PBQRenderer({
               </>
             )}
           </div>
-          <h3 className={`font-bold leading-snug ${compact ? 'text-base' : 'text-xl'}`}>{q.title}</h3>
+          <h3 className={`font-bold leading-snug ${compact ? 'text-base' : 'text-xl'}`}>{displayTitle}</h3>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{q.scenario}</p>
           {!examMode && (
             <div className="mt-5 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">
@@ -161,9 +165,12 @@ function OrderingPBQ({ q, ans, onAns, show }: { q: PBQOrdering; ans: string[]; o
     const initialOrder = useMemo(() => q.steps.map(s => s.label).sort(() => Math.random() - 0.5), [q.id]);
 
     const currentOrder: string[] = ans?.length > 0 ? ans : initialOrder;
-  if (!ans?.length && q.steps.length > 0) {
-    setTimeout(() => onAns(currentOrder), 0);
-  }
+  // Record the initial shuffled order once (in an effect, not during render)
+  // so the attempt counts as started and persists if the user navigates away.
+  useEffect(() => {
+    if (!ans?.length && q.steps.length > 0) onAns(initialOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.id]);
 
   const move = (from: number, to: number) => {
     if (show || to < 0 || to >= currentOrder.length) return;

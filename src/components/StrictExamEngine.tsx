@@ -11,7 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
-import { calculateScore, isMCQCorrect, isPBQCorrect, type ScoreResult } from '@/lib/examEngine';
+import { calculateScore, isMCQCorrect, isPBQCorrect, mcqAnswerText, pbqAnswerText, pbqCorrectText, selectionCount, type ScoreResult } from '@/lib/examEngine';
 import { saveAttempt, type QuestionAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { PBQRenderer } from '@/components/PBQRenderer';
@@ -19,6 +19,12 @@ import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { ExamResults } from '@/components/ExamResults';
 import { buildStrictExamOrder } from '@/lib/strictExamOrder';
 import { useSettings } from '@/lib/SettingsContext';
+import {
+  saveExamSession,
+  clearExamSession,
+  setExamActive,
+  type ExamSessionSnapshot,
+} from '@/lib/examSession';
 
 type ReviewFilter = 'all' | 'incomplete' | 'flagged';
 
@@ -28,6 +34,8 @@ interface StrictExamEngineProps {
   durationMinutes: number;
   examNumber?: 1 | 2 | 3 | 4 | 5;
   onFinish: () => void;
+  /** Saved session to restore (resume exactly where the user left off). */
+  initialSession?: ExamSessionSnapshot | null;
 }
 
 function pbqAttempted(answer: unknown): boolean {
@@ -47,28 +55,47 @@ export function StrictExamEngine({
   mcqs,
   durationMinutes,
   examNumber = 1,
+  initialSession = null,
   onFinish,
 }: StrictExamEngineProps) {
   const { settings } = useSettings();
+  // Restore the exact saved question list (including shuffled option lists)
+  // when resuming, so answers, indices and flags line up 1:1.
   const questions = useMemo(
-    () => buildStrictExamOrder(pbqs, mcqs, examNumber),
-    [pbqs, mcqs, examNumber],
+    () =>
+      initialSession
+        ? initialSession.questions
+        : buildStrictExamOrder(pbqs, mcqs, examNumber),
+    [pbqs, mcqs, examNumber, initialSession],
   );
 
-  const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<'item' | 'review' | 'submitted'>('item');
+  const [idx, setIdx] = useState(() =>
+    initialSession ? Math.max(0, Math.min(initialSession.idx, initialSession.questions.length - 1)) : 0,
+  );
+  const [phase, setPhase] = useState<'item' | 'review' | 'submitted'>(
+    initialSession?.phase === 'review' ? 'review' : 'item',
+  );
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
-  const [pbqAnswers, setPbqAnswers] = useState<Record<string, unknown>>({});
-  const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>({});
-  const [flags, setFlags] = useState<Set<string>>(new Set());
-  const [remaining, setRemaining] = useState(durationMinutes * 60);
+  const [pbqAnswers, setPbqAnswers] = useState<Record<string, unknown>>(
+    initialSession?.pbqAnswers ?? {},
+  );
+  const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>(
+    initialSession?.mcqAnswers ?? {},
+  );
+  const [flags, setFlags] = useState<Set<string>>(() => new Set(initialSession?.flags ?? []));
+  // Countdown state is the single source of truth for the clock: pausing,
+  // resuming and restoring a saved session all just work. While away, the
+  // remaining time is frozen — an accidental exit never burns the clock.
+  const [remaining, setRemaining] = useState<number>(
+    initialSession ? Math.max(0, initialSession.remainingSeconds) : durationMinutes * 60,
+  );
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [focusNotice, setFocusNotice] = useState(false);
   const [focusViolations, setFocusViolations] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(Boolean(initialSession?.isPaused));
 
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(initialSession?.startedAt ?? Date.now());
   const timeByQuestionRef = useRef<Record<string, number>>({});
   const activeItemRef = useRef<{ id: string; startedAt: number } | null>(null);
   const submittedRef = useRef(false);
@@ -77,6 +104,63 @@ export function StrictExamEngine({
 
   const current = questions[idx];
   const currentId = current?.data.id;
+
+  /* ── Session persistence ─────────────────────────────────────────
+     Snapshot the whole attempt continuously so an accidental exit
+     (refresh, closed tab, navigation) never loses the exam. */
+
+  const sessionDoneRef = useRef(false);
+  const itemPanelRef = useRef<HTMLElement | null>(null);
+  const stateRef = useRef({ idx, phase, mcqAnswers, pbqAnswers, flags, remaining, isPaused });
+  useEffect(() => {
+    stateRef.current = { idx, phase, mcqAnswers, pbqAnswers, flags, remaining, isPaused };
+  });
+
+  const buildSnapshot = useCallback((): ExamSessionSnapshot => ({
+    version: 2,
+    examNumber: initialSession?.examNumber ?? examNumber,
+    savedAt: Date.now(),
+    startedAt: startTimeRef.current,
+    remainingSeconds: stateRef.current.remaining,
+    isPaused: stateRef.current.isPaused,
+    phase: stateRef.current.phase === 'review' ? 'review' : 'item',
+    idx: stateRef.current.idx,
+    flags: [...stateRef.current.flags],
+    mcqAnswers: stateRef.current.mcqAnswers,
+    pbqAnswers: stateRef.current.pbqAnswers,
+    questions,
+  }), [examNumber, initialSession, questions]);
+
+  const saveSessionNow = useCallback(() => {
+    if (sessionDoneRef.current || stateRef.current.phase === 'submitted') return;
+    saveExamSession(buildSnapshot());
+  }, [buildSnapshot]);
+
+  // Save immediately whenever meaningful progress changes. (Time-only changes
+  // are covered by the periodic safety-net saves below.)
+  useEffect(() => {
+    saveSessionNow();
+  }, [idx, phase, mcqAnswers, pbqAnswers, flags, isPaused, saveSessionNow]);
+
+  // Safety net: periodic saves + save when the tab is hidden or unloaded.
+  useEffect(() => {
+    const interval = window.setInterval(saveSessionNow, 10000);
+    window.addEventListener('beforeunload', saveSessionNow);
+    document.addEventListener('visibilitychange', saveSessionNow);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('beforeunload', saveSessionNow);
+      document.removeEventListener('visibilitychange', saveSessionNow);
+      saveSessionNow();
+    };
+  }, [saveSessionNow]);
+
+  // Tell the trainer shell (sidebar / shortcuts) that an attempt is live.
+  useEffect(() => {
+    if (phase === 'submitted') return;
+    setExamActive(true);
+    return () => setExamActive(false);
+  }, [phase]);
 
   const isAnswered = useCallback(
     (question: ReturnType<typeof buildStrictExamOrder>[number]) =>
@@ -106,7 +190,10 @@ export function StrictExamEngine({
   }, [currentId, phase, isPaused, recordCurrentItemTime]);
 
   const togglePause = useCallback(() => {
-    if (!settings.exam_pause_enabled || phase === 'submitted') return;
+    // Starting a NEW pause requires the setting; un-pausing is always allowed
+    // (e.g. a session saved as paused, after the setting was switched off).
+    if (phase === 'submitted') return;
+    if (!settings.exam_pause_enabled && !isPaused) return;
 
     if (isPaused) {
       const started = pauseStartedAtRef.current;
@@ -127,20 +214,26 @@ export function StrictExamEngine({
       : 0;
     return totalPausedMsRef.current + activePause;
   }, [isPaused]);
+  void pausedMilliseconds; // kept for future per-pause reporting; the countdown drives time accounting
 
   const finishExam = useCallback(() => {
     if (submittedRef.current) return;
     submittedRef.current = true;
+    sessionDoneRef.current = true;
+    clearExamSession();
     recordCurrentItemTime();
 
     const startTime = startTimeRef.current;
+    // Time actually spent on the clock = duration minus what was left when the
+    // exam ended (paused/away time never burns the countdown).
+    const usedSeconds = Math.max(0, durationMinutes * 60 - stateRef.current.remaining);
     const result = calculateScore(
       pbqs,
       mcqs,
       pbqAnswers,
       mcqAnswers,
-      startTime,
-      pausedMilliseconds(),
+      Date.now() - usedSeconds * 1000,
+      0,
     );
     const questionTimes = { ...timeByQuestionRef.current };
 
@@ -151,8 +244,9 @@ export function StrictExamEngine({
         domain: DOMAIN_LABELS[q.domain],
         type: 'pbq' as const,
         isCorrect: isPBQCorrect(q, pbqAnswers[q.id]),
-        userAnswer: JSON.stringify(pbqAnswers[q.id] ?? {}),
-        correctAnswer: '',
+        userAnswer: pbqAnswerText(q, pbqAnswers[q.id]),
+        correctAnswer: pbqCorrectText(q),
+        rawAnswer: JSON.stringify(pbqAnswers[q.id] ?? null),
         explanation: q.explanation,
         timeSpentSeconds: questionTimes[q.id] || 0,
         timestamp: Date.now(),
@@ -163,8 +257,8 @@ export function StrictExamEngine({
         domain: DOMAIN_LABELS[q.domain],
         type: 'mcq' as const,
         isCorrect: isMCQCorrect(q, mcqAnswers[q.id]),
-        userAnswer: mcqAnswers[q.id] !== undefined ? JSON.stringify(mcqAnswers[q.id]) : 'Not answered',
-        correctAnswer: JSON.stringify(q.answer),
+        userAnswer: mcqAnswerText(q, mcqAnswers[q.id]),
+        correctAnswer: mcqAnswerText(q, q.answer),
         explanation: q.explanation,
         timeSpentSeconds: questionTimes[q.id] || 0,
         timestamp: Date.now(),
@@ -194,31 +288,32 @@ export function StrictExamEngine({
     setIsPaused(false);
     setPhase('submitted');
   }, [
+    durationMinutes,
     mcqAnswers,
     mcqs,
-    pausedMilliseconds,
     pbqAnswers,
     pbqs,
     questions.length,
     recordCurrentItemTime,
   ]);
 
+  // Auto-submit on expiry. Called through a ref so the timeout path always
+  // submits the LATEST answers.
+  const finishExamRef = useRef(finishExam);
+  useEffect(() => { finishExamRef.current = finishExam; }, [finishExam]);
+
+  // Pure countdown: pause freezes it, restoring a session seeds it, and an
+  // accidental exit leaves the saved value frozen until resume.
+  const expired = remaining <= 0;
   useEffect(() => {
-    if (phase === 'submitted' || isPaused) return;
-
-    const tick = () => {
-      const elapsed = Math.floor(
-        (Date.now() - startTimeRef.current - totalPausedMsRef.current) / 1000
-      );
-      const next = Math.max(0, durationMinutes * 60 - elapsed);
-      setRemaining(next);
-      if (next === 0) finishExam();
-    };
-
-    tick();
-    const timer = window.setInterval(tick, 1000);
+    if (phase === 'submitted' || isPaused || expired) return;
+    const timer = window.setInterval(() => setRemaining(value => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
-  }, [durationMinutes, finishExam, isPaused, phase]);
+  }, [isPaused, phase, expired]);
+
+  useEffect(() => {
+    if (phase !== 'submitted' && expired) finishExamRef.current();
+  }, [expired, phase]);
 
   useEffect(() => {
     if (phase === 'submitted') return;
@@ -262,6 +357,11 @@ export function StrictExamEngine({
     setIdx(nextIndex);
     setPhase('item');
   };
+
+  // Land at the top of every new question (panel is the scroll container).
+  useEffect(() => {
+    itemPanelRef.current?.scrollTo?.({ top: 0 });
+  }, [idx]);
 
   const toggleFlag = () => {
     if (!currentId || isPaused) return;
@@ -448,9 +548,10 @@ export function StrictExamEngine({
             </div>
           </div>
 
-          <section className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+          <section ref={itemPanelRef} className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
             {current.kind === 'pbq' ? (
               <PBQRenderer
+                key={current.data.id}
                 q={current.data}
                 ans={pbqAnswers[current.data.id]}
                 onAns={answer => setPbqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
@@ -460,6 +561,7 @@ export function StrictExamEngine({
               />
             ) : (
               <StrictMCQ
+                key={current.data.id}
                 q={current.data}
                 answer={mcqAnswers[current.data.id]}
                 onAnswer={answer => setMcqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
@@ -581,6 +683,9 @@ function PauseOverlay({ onResume }: { onResume: () => void }) {
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           The countdown and question timer are stopped, and the active question is covered until you resume.
         </p>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          If you close or leave this page, the exam is saved — resume any time from the Exams page with the timer frozen where you left it.
+        </p>
         <button
           onClick={onResume}
           className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
@@ -615,14 +720,14 @@ function StrictMCQ({
 
     const current = Array.isArray(answer) ? answer : [];
     if (current.includes(index)) onAnswer(current.filter(value => value !== index));
-    else if (current.length < 2) onAnswer([...current, index]);
+    else if (current.length < selectionCount(q)) onAnswer([...current, index]);
   };
 
   return (
     <div>
-      {q.type === 'select-two' && (
+      {q.type !== 'single' && (
         <div className="mb-4 inline-flex rounded-md border border-accent/25 bg-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-accent">
-          Select exactly two
+          Select exactly {selectionCount(q) === 2 ? 'two' : 'three'}
         </div>
       )}
       <h1 className="mb-5 max-w-4xl text-lg font-medium leading-7 sm:text-xl">{q.question}</h1>

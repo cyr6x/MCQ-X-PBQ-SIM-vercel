@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -6,18 +6,36 @@ import {
   Gauge,
   Maximize2,
   Pause,
+  Play,
   Settings2,
   ShieldCheck,
   Target,
   TriangleAlert,
+  Trash2,
 } from 'lucide-react';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
-import { buildExam, type ExamNumber } from '@/data/questions';
+import { buildExam, type ExamNumber, type MCQuestion, type PBQuestion } from '@/data/questions';
 import { useSettings } from '@/lib/SettingsContext';
 import { useProgressSnapshot } from '@/hooks/useProgressSnapshot';
 import { MetricCard, PageHeader, Panel, StatusChip } from '@/components/product/ProductUI';
+import {
+  loadExamSession,
+  clearExamSession,
+  hasExamSession,
+  examSessionProgress,
+  formatClock,
+  type ExamSessionSnapshot,
+} from '@/lib/examSession';
 
 const FORMS: ExamNumber[] = [1, 2, 3, 4, 5];
+
+function savedAgoLabel(savedAt: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - savedAt) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  return `${hours}h ago`;
+}
 
 export default function ExamPage() {
   const navigate = useNavigate();
@@ -25,8 +43,41 @@ export default function ExamPage() {
   const progress = useProgressSnapshot(settings);
   const [selected, setSelected] = useState<ExamNumber>(1);
   const [examData, setExamData] = useState<ReturnType<typeof buildExam> | null>(null);
+  const [activeSession, setActiveSession] = useState<ExamSessionSnapshot | null>(null);
+  const [resumeSession, setResumeSession] = useState<ExamSessionSnapshot | null>(null);
+
+  const refreshSession = useCallback(() => {
+    setActiveSession(loadExamSession());
+  }, []);
+
+  // Pick up any in-progress exam. A hard refresh mid-exam drops you straight
+  // back into it; deliberate visits show a resume card instead.
+  useEffect(() => {
+    const session = loadExamSession();
+    if (!session) return;
+    setActiveSession(session);
+    let wasReload = false;
+    try {
+      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+      wasReload = nav?.type === 'reload';
+    } catch {
+      /* older browsers — fall through to the banner */
+    }
+    if (wasReload) {
+      setResumeSession(session);
+    }
+  }, []);
 
   const startExam = async () => {
+    // Never silently destroy an in-progress attempt.
+    if (hasExamSession()) {
+      const ok = window.confirm(
+        `You have an in-progress exam (Form ${loadExamSession()?.examNumber ?? ''}).` +
+          '\n\nStart a new exam anyway? The in-progress attempt will be discarded.',
+      );
+      if (!ok) return;
+      clearExamSession();
+    }
     if (settings.exam_auto_fullscreen) {
       try {
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -36,8 +87,30 @@ export default function ExamPage() {
         // Fullscreen is optional training ergonomics, never a scoring dependency.
       }
     }
+    setResumeSession(null);
+    setActiveSession(null);
     setExamData(buildExam(selected));
   };
+
+  if (resumeSession) {
+    return (
+      <div className="fixed inset-0 z-[80] overflow-auto bg-background">
+        <StrictExamEngine
+          pbqs={resumeSession.questions.filter(q => q.kind === 'pbq').map(q => q.data as PBQuestion)}
+          mcqs={resumeSession.questions.filter(q => q.kind === 'mcq').map(q => q.data as MCQuestion)}
+          examNumber={resumeSession.examNumber}
+          durationMinutes={90}
+          initialSession={resumeSession}
+          onFinish={() => {
+            setResumeSession(null);
+            setExamData(null);
+            refreshSession();
+            navigate('/');
+          }}
+        />
+      </div>
+    );
+  }
 
   if (examData) {
     return (
@@ -49,6 +122,7 @@ export default function ExamPage() {
           durationMinutes={90}
           onFinish={() => {
             setExamData(null);
+            refreshSession();
             navigate('/');
           }}
         />
@@ -73,6 +147,46 @@ export default function ExamPage() {
           </button>
         }
       />
+
+      {activeSession && (
+        <div className="mt-6 rounded-2xl border border-primary/40 bg-primary/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
+                <Play className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Form {activeSession.examNumber} in progress</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span>{examSessionProgress(activeSession).answered}/{examSessionProgress(activeSession).total} answered</span>
+                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{formatClock(activeSession.remainingSeconds)} left</span>
+                  {activeSession.isPaused && <span className="font-bold text-warning">Paused</span>}
+                  <span>saved {savedAgoLabel(activeSession.savedAt)}</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2 sm:ml-auto">
+              <button
+                onClick={() => setResumeSession(activeSession)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90"
+              >
+                <Play className="h-3.5 w-3.5 fill-current" /> Resume exam
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Discard this in-progress exam? This cannot be undone.')) {
+                    clearExamSession();
+                    setActiveSession(null);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-xs font-bold text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Questions" value="90" note="weighted full form" icon={<Target className="h-4 w-4" />} tone="primary" />

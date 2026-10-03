@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import { confirmLeaveExam } from '@/lib/examSession';
 import {
   BarChart3,
   BookOpen,
@@ -84,7 +85,16 @@ export function AppSidebar() {
                       tooltip={item.title}
                       className="h-10 rounded-lg data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
                     >
-                      <NavLink to={item.url} end={item.url === '/'} className="flex items-center gap-3">
+                      <NavLink
+                        to={item.url}
+                        end={item.url === '/'}
+                        className="flex items-center gap-3"
+                        onClick={(e) => {
+                          // Never silently end a running exam/practice session by
+                          // clicking a sidebar link (e.g. Settings).
+                          if (!confirmLeaveExam()) e.preventDefault();
+                        }}
+                      >
                         <item.icon className="h-4 w-4" />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
@@ -108,7 +118,13 @@ export function AppSidebar() {
               tooltip="Settings"
               className="h-10 rounded-lg data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
             >
-              <NavLink to="/settings" className="flex items-center gap-3">
+              <NavLink
+                to="/settings"
+                className="flex items-center gap-3"
+                onClick={(e) => {
+                  if (!confirmLeaveExam()) e.preventDefault();
+                }}
+              >
                 <Settings className="h-4 w-4" />
                 {!collapsed && <span className="text-sm">Settings</span>}
               </NavLink>
