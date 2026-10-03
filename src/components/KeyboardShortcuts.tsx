@@ -8,7 +8,6 @@
  */
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { confirmLeaveExam } from '@/lib/examSession';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Keyboard } from 'lucide-react';
 
@@ -38,8 +37,6 @@ export function KeyboardShortcuts() {
       if (e.key === 'g') { lastG = Date.now(); return; }
       if (Date.now() - lastG < 1200 && ROUTES[e.key]) {
         e.preventDefault();
-        // Don't let a shortcut silently end a running exam/practice session.
-        if (!confirmLeaveExam()) return;
         navigate(ROUTES[e.key]);
         lastG = 0;
       }

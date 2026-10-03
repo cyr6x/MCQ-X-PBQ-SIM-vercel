@@ -168,6 +168,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: pbqAnswerText(q, pbqAnswers[q.id]),
         correctAnswer: pbqCorrectText(q),
         rawAnswer: JSON.stringify(pbqAnswers[q.id] ?? null),
+        rawQuestion: JSON.stringify(q),
         explanation: q.explanation,
         timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),

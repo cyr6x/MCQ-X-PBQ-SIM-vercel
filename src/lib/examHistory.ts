@@ -16,6 +16,9 @@ export interface QuestionAttempt {
   timestamp: number;
   /** Raw (JSON-serialized) PBQ answer object, kept for interactive review. */
   rawAnswer?: string;
+  /** JSON of the exact shuffled PBQ variant answered (options may be reordered
+   *  per attempt — the raw answer's indices only make sense against it). */
+  rawQuestion?: string;
 }
 
 export interface ExamAttempt {
@@ -47,6 +50,7 @@ export interface QuestionStats {
   userAnswer: string;        // ← added: last user answer for review dialog
   correctAnswer: string;     // ← added: correct answer for review dialog
   rawAnswer?: string;        // ← added: raw PBQ answer object for interactive review
+  rawQuestion?: string;      // ← added: exact shuffled PBQ variant for interactive review
 }
 
 const HISTORY_KEY = 'secplus-exam-history';
@@ -105,6 +109,7 @@ function updateQuestionStats(questions: QuestionAttempt[]): QuestionStats[] {
       userAnswer: '',
       correctAnswer: '',
       rawAnswer: '',
+      rawQuestion: '',
     };
     existing.timesAttempted++;
     if (q.isCorrect) {
@@ -125,6 +130,7 @@ function updateQuestionStats(questions: QuestionAttempt[]): QuestionStats[] {
     existing.userAnswer = q.userAnswer;
     existing.correctAnswer = q.correctAnswer;
     existing.rawAnswer = q.rawAnswer;
+    existing.rawQuestion = q.rawQuestion;
     stats[q.questionId] = existing;
     touched.push(existing);
   });

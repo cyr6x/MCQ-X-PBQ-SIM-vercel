@@ -1,14 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
-import { hasExamSession, loadExamSession } from '@/lib/examSession';
+import { hasExamSession, loadExamSession, EXAM_END_EVENT } from '@/lib/examSession';
 import { loadHistory } from '@/lib/examHistory';
 
 vi.mock('@/lib/SettingsContext', () => ({
   useSettings: () => ({
     settings: {
-      exam_pause_enabled: true,
       exam_auto_fullscreen: false,
       exam_focus_notice: true,
       amber_threshold_seconds: 1200,
@@ -56,7 +55,7 @@ describe('StrictExamEngine training controls', () => {
     expect(screen.getByRole('button', { name: 'Next question' })).toBeInTheDocument();
   });
 
-  it('hides exam metadata and provides a content-covering pause/resume control', () => {
+  it('hides exam metadata and offers NO pause — the clock cannot be stopped', () => {
     render(
       <StrictExamEngine
         pbqs={[pbq]}
@@ -69,12 +68,34 @@ describe('StrictExamEngine training controls', () => {
     expect(screen.queryByText(/Difficulty 3/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Objective 4\.1/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /pause/i }));
-    expect(screen.getByText('Exam paused')).toBeInTheDocument();
-    expect(screen.getByText(/countdown and question timer are stopped/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
+    // No pause control anywhere, and the copy says so.
+    expect(screen.queryByRole('button', { name: /pause/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Exam paused')).not.toBeInTheDocument();
+    expect(screen.getByText(/timer cannot be paused/i)).toBeInTheDocument();
+  });
+
+  it('counts down continuously from the wall clock', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'Date'] });
+    vi.setSystemTime(new Date('2026-01-01T10:00:00Z'));
+    try {
+      render(
+        <StrictExamEngine
+          pbqs={[]}
+          mcqs={[mcq]}
+          durationMinutes={90}
+          onFinish={() => {}}
+        />
+      );
+      expect(screen.getByText('90:00')).toBeInTheDocument();
+
+      // 2 minutes pass — the timer must drop by exactly 2 minutes.
+      act(() => {
+        vi.advanceTimersByTime(2 * 60 * 1000);
+      });
+      expect(screen.getByText('88:00')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -138,22 +159,105 @@ describe('StrictExamEngine session persistence', () => {
     expect(saved!.mcqAnswers[mcq.id]).toBe(1);
     expect(saved!.questions).toHaveLength(2);
 
-    // Time away must not burn the countdown: resume shows the saved clock.
-    const frozen = { ...saved!, remainingSeconds: 600, isPaused: true };
+    // The clock kept running while away: started 10 min ago → 80:00 left.
+    const resumed = {
+      ...saved!,
+      startedAt: Date.now() - 10 * 60 * 1000,
+      durationSeconds: 90 * 60,
+      remainingSeconds: 80 * 60,
+    };
     render(
       <StrictExamEngine
         pbqs={saved!.questions.filter(q => q.kind === 'pbq').map(q => q.data as PBQuestion)}
         mcqs={saved!.questions.filter(q => q.kind === 'mcq').map(q => q.data as MCQuestion)}
         durationMinutes={90}
-        initialSession={frozen}
+        initialSession={resumed}
         onFinish={() => {}}
       />
     );
 
-    expect(screen.getByText('10:00')).toBeInTheDocument();
-    expect(screen.getByText('Exam paused')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
+    expect(screen.getByText('80:00')).toBeInTheDocument();
     expect(screen.queryByText('Exam paused')).not.toBeInTheDocument();
+  });
+
+  it('auto-submits on resume when the time ran out while away', () => {
+    const expiredSession = {
+      version: 3 as const,
+      examNumber: 1 as const,
+      savedAt: Date.now() - 2 * 60 * 60 * 1000,
+      startedAt: Date.now() - 95 * 60 * 1000,
+      durationSeconds: 90 * 60,
+      remainingSeconds: 0,
+      phase: 'item' as const,
+      idx: 0,
+      flags: [],
+      mcqAnswers: { [mcq.id]: 1 },
+      pbqAnswers: {},
+      questions: [
+        { kind: 'mcq' as const, data: mcq },
+        { kind: 'pbq' as const, data: pbq },
+      ],
+    };
+
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        initialSession={expiredSession}
+        onFinish={() => {}}
+      />
+    );
+
+    // Expired on arrival: submitted immediately, attempt saved, session cleared.
+    expect(hasExamSession()).toBe(false);
+    const history = loadHistory();
+    const attempt = history[history.length - 1];
+    expect(attempt).toBeDefined();
+    expect(attempt.questions.find(q => q.questionId === mcq.id)?.userAnswer).toBe(`B. ${mcq.options[1]}`);
+  });
+
+  it('ends the exam (submits as-is) when navigation away is confirmed', () => {
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+
+    // The navigation guard (e.g. hitting Settings) ends the exam via this event.
+    window.dispatchEvent(new CustomEvent(EXAM_END_EVENT));
+
+    expect(hasExamSession()).toBe(false);
+    const history = loadHistory();
+    const attempt = history[history.length - 1];
+    expect(attempt).toBeDefined();
+    // Submitted with the answers given so far.
+    expect(attempt.questions.find(q => q.questionId === mcq.id)?.userAnswer).toBe(`B. ${mcq.options[1]}`);
+    expect(attempt.questions.find(q => q.questionId === pbq.id)?.userAnswer).toBe('Not answered');
+  });
+
+  it('scrolls back to the top of the question panel on every question change', () => {
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollTo = scrollSpy;
+
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    scrollSpy.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /next question|review exam/i }));
+    expect(scrollSpy).toHaveBeenCalledWith({ top: 0 });
+    Element.prototype.scrollTo = () => {};
   });
 
   it('clears the session on submit and stores readable answers in history', () => {

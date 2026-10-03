@@ -40,11 +40,13 @@ describe('live product surfaces', () => {
     expect(screen.getByText('Next PBQ set')).toBeInTheDocument();
   });
 
-  it('renders full exam setup with interruption controls', () => {
+  it('renders full exam setup with real-exam fidelity (no pause)', () => {
     renderPage(<ExamPage />, '/exam');
     expect(screen.getByText('90 questions. 90 minutes. One clean signal.')).toBeInTheDocument();
     expect(screen.queryByText(/Exam ergonomics/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText('Pause').length).toBeGreaterThan(0);
+    // The real exam has no pause — the product must not advertise one.
+    expect(screen.queryByText('Pause')).not.toBeInTheDocument();
+    expect(screen.getByText(/No pause, no stopping the clock/i)).toBeInTheDocument();
   });
 
   it('renders analytics and its readiness breakdown surface', () => {

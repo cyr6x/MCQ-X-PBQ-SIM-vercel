@@ -5,7 +5,6 @@ import {
   Clock,
   Gauge,
   Maximize2,
-  Pause,
   Play,
   Settings2,
   ShieldCheck,
@@ -23,6 +22,7 @@ import {
   clearExamSession,
   hasExamSession,
   examSessionProgress,
+  sessionRemaining,
   formatClock,
   type ExamSessionSnapshot,
 } from '@/lib/examSession';
@@ -45,6 +45,14 @@ export default function ExamPage() {
   const [examData, setExamData] = useState<ReturnType<typeof buildExam> | null>(null);
   const [activeSession, setActiveSession] = useState<ExamSessionSnapshot | null>(null);
   const [resumeSession, setResumeSession] = useState<ExamSessionSnapshot | null>(null);
+  // Ticker so the resume card shows the REAL remaining time — the exam clock
+  // is wall-clock based and keeps running while the user sits on this page.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!activeSession) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [activeSession]);
 
   const refreshSession = useCallback(() => {
     setActiveSession(loadExamSession());
@@ -159,9 +167,11 @@ export default function ExamPage() {
                 <p className="text-sm font-semibold">Form {activeSession.examNumber} in progress</p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span>{examSessionProgress(activeSession).answered}/{examSessionProgress(activeSession).total} answered</span>
-                  <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{formatClock(activeSession.remainingSeconds)} left</span>
-                  {activeSession.isPaused && <span className="font-bold text-warning">Paused</span>}
+                  <span className="inline-flex items-center gap-1 font-mono font-semibold text-foreground"><Clock className="h-3 w-3" />{formatClock(sessionRemaining(activeSession, now))} left</span>
                   <span>saved {savedAgoLabel(activeSession.savedAt)}</span>
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                  The clock keeps running — there is no pause. Resume to continue with the time you have left.
                 </p>
               </div>
             </div>
@@ -191,7 +201,7 @@ export default function ExamPage() {
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard label="Questions" value="90" note="weighted full form" icon={<Target className="h-4 w-4" />} tone="primary" />
         <MetricCard label="Timer" value="90:00" note="countdown" icon={<Clock className="h-4 w-4" />} />
-        <MetricCard label="Pause" value={settings.exam_pause_enabled ? 'On' : 'Off'} note="interruption control" icon={<Pause className="h-4 w-4" />} tone={settings.exam_pause_enabled ? 'success' : 'default'} />
+        <MetricCard label="Passing" value="750 / 900" note="scaled score" icon={<ShieldCheck className="h-4 w-4" />} tone="success" />
         <MetricCard label="Fullscreen" value={settings.exam_auto_fullscreen ? 'Auto' : 'Manual'} note="focus preference" icon={<Maximize2 className="h-4 w-4" />} />
       </div>
 
@@ -239,7 +249,6 @@ export default function ExamPage() {
         <div className="space-y-4">
           <Panel title={`Form ${selected}`} eyebrow="Launch">
             <div className="space-y-3 text-xs">
-              <ExamSetting label="Pause" value={settings.exam_pause_enabled ? 'Available' : 'Disabled'} />
               <ExamSetting label="Fullscreen" value={settings.exam_auto_fullscreen ? 'Auto-start' : 'Manual'} />
               <ExamSetting label="Focus notice" value={settings.exam_focus_notice ? 'Enabled' : 'Disabled'} />
               <ExamSetting label="Warnings" value={`${Math.round(settings.amber_threshold_seconds / 60)}m / ${Math.round(settings.red_threshold_seconds / 60)}m`} />
@@ -252,9 +261,7 @@ export default function ExamPage() {
               Start Form {selected}
             </button>
             <p className="mt-2 text-center text-[10px] leading-4 text-muted-foreground">
-              {settings.exam_pause_enabled
-                ? 'Pause is for genuine interruptions; otherwise keep the clock honest.'
-                : 'Pause is disabled. The timer will run continuously.'}
+              No pause, no stopping the clock — exactly like the real exam. If you leave mid-exam it ends.
             </p>
           </Panel>
 

@@ -161,6 +161,7 @@ export function PBQPractice({ onFinish }: Props) {
         userAnswer: pbqAnswerText(question, answers[question.id]),
         correctAnswer: pbqCorrectText(question),
         rawAnswer: JSON.stringify(answers[question.id] ?? null),
+        rawQuestion: JSON.stringify(question),
         explanation: question.explanation,
         timeSpentSeconds: questionTimesRef.current[question.id] || 0,
         timestamp: endedAt,

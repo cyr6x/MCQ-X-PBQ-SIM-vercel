@@ -246,8 +246,19 @@ export default function ReviewPage() {
                                 } catch {
                                   savedAnswer = undefined;
                                 }
-                                const pbq = pbqById.get(stat.questionId)!;
-                                return <PBQReviewDetail q={pbq} answer={savedAnswer} />;
+                                // Prefer the exact shuffled variant the user
+                                // answered against (option order differs per
+                                // attempt); fall back to the bank question.
+                                let variant = pbqById.get(stat.questionId);
+                                if (stat.rawQuestion) {
+                                  try {
+                                    variant = JSON.parse(stat.rawQuestion);
+                                  } catch {
+                                    /* keep bank variant */
+                                  }
+                                }
+                                if (!variant) return null;
+                                return <PBQReviewDetail q={variant} answer={savedAnswer} />;
                               })()}
                             </section>
                           )}

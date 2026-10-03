@@ -5,10 +5,13 @@ import {
   clearExamSession,
   hasExamSession,
   examSessionProgress,
+  sessionRemaining,
   formatClock,
   setExamActive,
   setStudyActive,
   confirmLeaveExam,
+  requestExamEnd,
+  EXAM_END_EVENT,
   type ExamSessionSnapshot,
 } from '@/lib/examSession';
 import { mcqSingle, mcqSelectTwo, pbqBank, shufflePBQOptions, buildExam, shuffleOptions, selectionCount } from '@/data/questions';
@@ -18,12 +21,12 @@ import type { MCQuestion, PBQuestion } from '@/data/questions';
 function makeSession(overrides: Partial<ExamSessionSnapshot> = {}): ExamSessionSnapshot {
   const q: MCQuestion = mcqSingle[0];
   return {
-    version: 2,
+    version: 3,
     examNumber: 1,
     savedAt: Date.now(),
     startedAt: Date.now(),
+    durationSeconds: 90 * 60,
     remainingSeconds: 3000,
-    isPaused: false,
     phase: 'item',
     idx: 2,
     flags: ['s1'],
@@ -74,6 +77,23 @@ describe('examSession persistence', () => {
     expect(formatClock(5400)).toBe('90:00');
     expect(formatClock(-5)).toBe('00:00');
   });
+
+  it('computes remaining time from the wall clock — time away keeps burning (no pause)', () => {
+    const now = Date.now();
+    const s = makeSession({ startedAt: now - 10 * 60 * 1000, durationSeconds: 90 * 60 });
+    // 10 of 90 minutes gone
+    expect(sessionRemaining(s, now)).toBe(80 * 60);
+    // another 30 minutes "away" — the clock never stops
+    expect(sessionRemaining(s, now + 30 * 60 * 1000)).toBe(50 * 60);
+    // clamped at zero past expiry
+    expect(sessionRemaining(s, now + 95 * 60 * 1000)).toBe(0);
+  });
+
+  it('rejects old v2 snapshots (schema changed with the no-pause clock)', () => {
+    const legacy = { ...makeSession(), version: 2 } as unknown as ExamSessionSnapshot;
+    saveExamSession(legacy);
+    expect(loadExamSession()).toBeNull();
+  });
 });
 
 describe('navigation guard', () => {
@@ -89,13 +109,27 @@ describe('navigation guard', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
-  it('asks before leaving an active exam', () => {
+  it('ENDS the active exam when the user confirms leaving (settings-ends-exam)', () => {
+    const endListener = vi.fn();
+    window.addEventListener(EXAM_END_EVENT, endListener);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     setExamActive(true);
     expect(confirmLeaveExam()).toBe(true);
+    expect(endListener).toHaveBeenCalledTimes(1);
+    // declining keeps the exam running
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     expect(confirmLeaveExam()).toBe(false);
+    expect(endListener).toHaveBeenCalledTimes(1);
     setExamActive(false);
+    window.removeEventListener(EXAM_END_EVENT, endListener);
+  });
+
+  it('requestExamEnd dispatches the end event directly', () => {
+    const endListener = vi.fn();
+    window.addEventListener(EXAM_END_EVENT, endListener);
+    requestExamEnd();
+    expect(endListener).toHaveBeenCalledTimes(1);
+    window.removeEventListener(EXAM_END_EVENT, endListener);
   });
 
   it('asks before leaving an active study session', () => {
