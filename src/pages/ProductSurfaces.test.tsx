@@ -40,11 +40,14 @@ describe('live product surfaces', () => {
     expect(screen.getByText('Next PBQ set')).toBeInTheDocument();
   });
 
-  it('renders full exam setup with interruption controls', () => {
+  it('renders full exam setup with pause and resumable sessions', () => {
     renderPage(<ExamPage />, '/exam');
     expect(screen.getByText('90 questions. 90 minutes. One clean signal.')).toBeInTheDocument();
     expect(screen.queryByText(/Exam ergonomics/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText('Pause').length).toBeGreaterThan(0);
+    // Pause is a first-class feature and leaving is always recoverable.
+    expect(screen.getByText('Pause')).toBeInTheDocument();
+    expect(screen.getByText(/Pause stops the clock/i)).toBeInTheDocument();
+    expect(screen.getByText(/Leaving saves the exam/i)).toBeInTheDocument();
   });
 
   it('renders analytics and its readiness breakdown surface', () => {

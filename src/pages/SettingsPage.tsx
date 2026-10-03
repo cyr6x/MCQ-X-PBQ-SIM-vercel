@@ -90,12 +90,6 @@ export default function SettingsPage() {
         <Panel title="Exam ergonomics" eyebrow="Simulation" description="These controls affect interruption handling and focus—not scoring or content difficulty.">
           <div className="space-y-2">
             <ToggleRow
-              label="Allow interruption pause"
-              help="Covers the active question and stops both countdown and per-question timing."
-              checked={draft.exam_pause_enabled}
-              onChange={(value) => updateField('exam_pause_enabled', value)}
-            />
-            <ToggleRow
               label="Auto fullscreen on exam start"
               help="Requests browser fullscreen when a full form begins."
               checked={draft.exam_auto_fullscreen}

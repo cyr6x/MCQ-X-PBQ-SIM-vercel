@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { ScoreResult } from '@/lib/examEngine';
-import { getPBQCredit, isMCQCorrect } from '@/lib/examEngine';
+import { getPBQCredit, isMCQCorrect, selectionCount } from '@/lib/examEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
@@ -515,7 +515,7 @@ function RetestMCQ({ q }: { q: MCQuestion }) {
     }
     const current = Array.isArray(answer) ? answer : [];
     if (current.includes(index)) setAnswer(current.filter(i => i !== index));
-    else if (current.length < 2) setAnswer([...current, index]);
+    else if (current.length < selectionCount(q)) setAnswer([...current, index]);
   };
 
   const isSelected = (index: number) =>
@@ -542,7 +542,9 @@ function RetestMCQ({ q }: { q: MCQuestion }) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground">Quick retest</div>
-          {q.type === 'select-two' && <div className="mt-1 text-[10px] text-accent">Select exactly two.</div>}
+          {q.type !== 'single' && (
+            <div className="mt-1 text-[10px] text-accent">Select exactly {selectionCount(q) === 2 ? 'two' : 'three'}.</div>
+          )}
         </div>
         <button onClick={() => { setOpen(false); reset(); }} className="text-[10px] font-bold text-muted-foreground hover:text-foreground">Close</button>
       </div>
@@ -563,7 +565,7 @@ function RetestMCQ({ q }: { q: MCQuestion }) {
       <div className="mt-3 flex items-center gap-2">
         <button
           onClick={() => setChecked(true)}
-          disabled={answer === undefined || (q.type === 'select-two' && (!Array.isArray(answer) || answer.length !== 2))}
+          disabled={answer === undefined || (q.type !== 'single' && (!Array.isArray(answer) || answer.length !== selectionCount(q)))}
           className="rounded-lg bg-primary px-3 py-2 text-xs font-black text-primary-foreground disabled:opacity-40"
         >
           Check answer
