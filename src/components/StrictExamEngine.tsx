@@ -19,6 +19,7 @@ import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { ExamResults } from '@/components/ExamResults';
 import { buildStrictExamOrder } from '@/lib/strictExamOrder';
 import { useSettings } from '@/lib/SettingsContext';
+import { saveExamCheckpoint, clearExamCheckpoint, loadExamCheckpoint } from '@/lib/examCheckpoint';
 
 type ReviewFilter = 'all' | 'incomplete' | 'flagged';
 
@@ -74,9 +75,65 @@ export function StrictExamEngine({
   const submittedRef = useRef(false);
   const totalPausedMsRef = useRef(0);
   const pauseStartedAtRef = useRef<number | null>(null);
+  const checkpointTimerRef = useRef<number | null>(null);
 
   const current = questions[idx];
   const currentId = current?.data.id;
+
+  // Load checkpoint on mount
+  useEffect(() => {
+    const checkpoint = loadExamCheckpoint();
+    if (checkpoint && checkpoint.examNumber === examNumber) {
+      setPbqAnswers(checkpoint.pbqAnswers);
+      setMcqAnswers(checkpoint.mcqAnswers);
+      setFlags(new Set(checkpoint.flags));
+      setIdx(checkpoint.currentIndex);
+      setRemaining(checkpoint.remaining);
+      startTimeRef.current = checkpoint.startTime;
+      totalPausedMsRef.current = checkpoint.totalPausedMs;
+      timeByQuestionRef.current = checkpoint.timeByQuestion;
+    }
+  }, [examNumber]);
+
+  // Auto-save checkpoint every 30 seconds
+  useEffect(() => {
+    if (phase === 'submitted') {
+      clearExamCheckpoint();
+      if (checkpointTimerRef.current) {
+        window.clearInterval(checkpointTimerRef.current);
+        checkpointTimerRef.current = null;
+      }
+      return;
+    }
+
+    const saveCheckpoint = () => {
+      if (phase === 'item' || phase === 'review') {
+        saveExamCheckpoint({
+          examNumber,
+          startTime: startTimeRef.current,
+          pbqAnswers,
+          mcqAnswers,
+          flags: Array.from(flags),
+          currentIndex: idx,
+          remaining,
+          totalPausedMs: totalPausedMsRef.current,
+          timeByQuestion: timeByQuestionRef.current,
+        });
+      }
+    };
+
+    // Save immediately on first render
+    saveCheckpoint();
+
+    // Then save every 30 seconds
+    checkpointTimerRef.current = window.setInterval(saveCheckpoint, 30000);
+
+    return () => {
+      if (checkpointTimerRef.current) {
+        window.clearInterval(checkpointTimerRef.current);
+      }
+    };
+  }, [examNumber, phase, pbqAnswers, mcqAnswers, flags, idx, remaining]);
 
   const isAnswered = useCallback(
     (question: ReturnType<typeof buildStrictExamOrder>[number]) =>
