@@ -504,7 +504,7 @@ export function StrictExamEngine({
 
         <button
           onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
-          className="fixed right-0 top-1/2 z-50 hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
+          className="fixed right-0 top-1/2 z-50 hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl hover:opacity-95 md:flex"
           aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
           title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
         >
