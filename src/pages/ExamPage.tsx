@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -10,12 +10,15 @@ import {
   ShieldCheck,
   Target,
   TriangleAlert,
+  PlayCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
 import { buildExam, type ExamNumber } from '@/data/questions';
 import { useSettings } from '@/lib/SettingsContext';
 import { useProgressSnapshot } from '@/hooks/useProgressSnapshot';
 import { MetricCard, PageHeader, Panel, StatusChip } from '@/components/product/ProductUI';
+import { loadExamCheckpoint, clearExamCheckpoint } from '@/lib/examCheckpoint';
 
 const FORMS: ExamNumber[] = [1, 2, 3, 4, 5];
 
@@ -25,8 +28,37 @@ export default function ExamPage() {
   const progress = useProgressSnapshot(settings);
   const [selected, setSelected] = useState<ExamNumber>(1);
   const [examData, setExamData] = useState<ReturnType<typeof buildExam> | null>(null);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [savedCheckpoint, setSavedCheckpoint] = useState<ReturnType<typeof loadExamCheckpoint> | null>(null);
 
-  const startExam = async () => {
+  // Check for saved checkpoint on mount
+  useEffect(() => {
+    const checkpoint = loadExamCheckpoint();
+    if (checkpoint) {
+      setSavedCheckpoint(checkpoint);
+      setShowResumePrompt(true);
+      setSelected(checkpoint.examNumber as ExamNumber);
+    }
+  }, []);
+
+  const resumeExam = async () => {
+    if (settings.exam_auto_fullscreen) {
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch {
+        // Fullscreen is optional training ergonomics, never a scoring dependency.
+      }
+    }
+    setShowResumePrompt(false);
+    setExamData(buildExam(selected));
+  };
+
+  const startFresh = async () => {
+    clearExamCheckpoint();
+    setSavedCheckpoint(null);
+    setShowResumePrompt(false);
     if (settings.exam_auto_fullscreen) {
       try {
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
@@ -37,6 +69,14 @@ export default function ExamPage() {
       }
     }
     setExamData(buildExam(selected));
+  };
+
+  const startExam = async () => {
+    if (savedCheckpoint) {
+      setShowResumePrompt(true);
+    } else {
+      await startFresh();
+    }
   };
 
   if (examData) {
@@ -57,13 +97,50 @@ export default function ExamPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <PageHeader
-        eyebrow="Full-length rehearsal"
-        title="90 questions. 90 minutes. One clean signal."
-        description="No explanations or objective metadata during the attempt. PBQs and MCQs are mixed through the form, with final review before submission and detailed remediation afterwards."
-        icon={<ShieldCheck className="h-4 w-4" />}
-        actions={
+    <>
+      {showResumePrompt && savedCheckpoint && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-4 backdrop-blur-xl">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <PlayCircle className="h-7 w-7" />
+            </div>
+            <h2 className="text-xl font-bold">Resume interrupted exam?</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Form {savedCheckpoint.examNumber} was interrupted. You were on question {savedCheckpoint.currentIndex + 1} with {Math.floor(savedCheckpoint.remaining / 60)} minutes remaining.
+            </p>
+            <div className="mt-6 flex gap-2">
+              <button
+                onClick={resumeExam}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+              >
+                <PlayCircle className="h-4 w-4" />
+                Resume
+              </button>
+              <button
+                onClick={startFresh}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-bold text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Start Fresh
+              </button>
+            </div>
+            <button
+              onClick={() => setShowResumePrompt(false)}
+              className="mt-2 w-full text-center text-xs text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <PageHeader
+          eyebrow="Full-length rehearsal"
+          title="90 questions. 90 minutes. One clean signal."
+          description="No explanations or objective metadata during the attempt. PBQs and MCQs are mixed through the form, with final review before submission and detailed remediation afterwards."
+          icon={<ShieldCheck className="h-4 w-4" />}
+          actions={
           <button
             onClick={() => navigate('/settings')}
             className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -164,6 +241,7 @@ export default function ExamPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 
