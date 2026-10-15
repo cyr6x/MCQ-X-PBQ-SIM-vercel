@@ -1189,7 +1189,7 @@ const basePbqBank: PBQuestion[] = [
   },
   {
     id:'pbq-log7', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'DNS Tunneling / Data Exfiltration',
+    title:'Unusual DNS Query Pattern',
     scenario:'A workstation is generating thousands of long DNS TXT lookups to an unfamiliar domain. Review the DNS logs.',
     logEntries:[
       { line:'10.10.5.22 -> dns: query TXT a8f3kd92...payload.exfil-c2.io (212 bytes)' },
@@ -1208,7 +1208,7 @@ const basePbqBank: PBQuestion[] = [
   },
   {
     id:'pbq-log8', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'Ransomware Pre-Encryption Indicators',
+    title:'File Server Anomaly Investigation',
     scenario:'A file server logs an unusual pattern just before users report being unable to open documents. Review the entries.',
     logEntries:[
       { line:'10.0.4.77 RENAME \\\\fs01\\share\\report.docx -> report.docx.lockbit' },
@@ -1227,7 +1227,7 @@ const basePbqBank: PBQuestion[] = [
   },
   {
     id:'pbq-log9', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'MFA Push-Bombing Attempt',
+    title:'Identity Provider Alert Investigation',
     scenario:'Your IdP records an unusual burst of MFA prompts for a single executive account at 3 a.m.',
     logEntries:[
       { line:'03:14 MFA_PUSH user=ceo device=registered status=DENIED' },
@@ -1246,7 +1246,7 @@ const basePbqBank: PBQuestion[] = [
   },
   {
     id:'pbq-log10', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'Lateral Movement via Pass-the-Hash',
+    title:'Suspicious Authentication Pattern',
     scenario:'Your EDR shows a workstation suddenly authenticating to multiple servers using NTLM with the same hash.',
     logEntries:[
       { line:'WS-101 -> SRV-FILE01: NTLM auth user=DOMAIN\\admin (no interactive logon recorded)' },

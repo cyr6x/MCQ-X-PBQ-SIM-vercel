@@ -318,7 +318,7 @@ export const advancedPBQs: PBQuestion[] = [
     domain: 'D4',
     difficulty: 3,
     type: 'terminal',
-    title: 'Contain a Compromised Linux Host',
+    title: 'Incident Response on Linux Host',
     scenario: 'An internet-facing Linux server is suspected of compromise. Use the terminal evidence and choose the safest command for each response objective. Assume you are already connected through an authorized administrative session.',
     transcript: [
       '$ id',
@@ -356,7 +356,7 @@ export const advancedPBQs: PBQuestion[] = [
     domain: 'D4',
     difficulty: 3,
     type: 'terminal',
-    title: 'Investigate Suspicious PowerShell Activity',
+    title: 'Windows Endpoint Investigation',
     scenario: 'EDR flags encoded PowerShell execution on a Windows endpoint. Select the command or action that best supports each investigation step.',
     transcript: [
       'Process: powershell.exe -NoP -W Hidden -EncodedCommand SQBFAFgA...',

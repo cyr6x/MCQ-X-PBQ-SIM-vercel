@@ -47,19 +47,42 @@ export function buildStrictExamOrder(
   const pbqOrder = seededShuffle(pbqs, seed + 11);
   const mcqOrder = seededShuffle(mcqs, seed + 29);
 
-  // One randomized PBQ position per segment spreads them across the full form
-  // without forcing a predictable fixed index or accidental clustering.
+  // Distribute PBQs throughout the exam, avoiding the first 5 positions and preventing clustering.
+  // Each PBQ gets a segment to ensure even distribution across the full form.
   const pbqPositions = new Set<number>();
+  const firstSafePosition = 5; // Never place PBQs in first 5 questions
+  const availablePositions = total - firstSafePosition;
+  
   for (let i = 0; i < pbqOrder.length; i++) {
-    const segmentStart = Math.floor((i * total) / pbqOrder.length);
+    // Calculate segment boundaries, offset by firstSafePosition
+    const segmentStart = firstSafePosition + Math.floor((i * availablePositions) / pbqOrder.length);
     const segmentEnd = Math.max(
       segmentStart,
-      Math.floor(((i + 1) * total) / pbqOrder.length) - 1,
+      firstSafePosition + Math.floor(((i + 1) * availablePositions) / pbqOrder.length) - 1,
     );
     const span = segmentEnd - segmentStart + 1;
+    
+    // Try to place PBQ randomly within segment
     let position = segmentStart + Math.floor(random() * span);
-    while (pbqPositions.has(position) && position < segmentEnd) position++;
-    while (pbqPositions.has(position) && position > segmentStart) position--;
+    let attempts = 0;
+    const maxAttempts = span * 2;
+    
+    // Find an available position within the segment
+    while (pbqPositions.has(position) && attempts < maxAttempts) {
+      position = segmentStart + Math.floor(random() * span);
+      attempts++;
+    }
+    
+    // Fallback: linear search if random placement failed
+    if (pbqPositions.has(position)) {
+      for (let p = segmentStart; p <= segmentEnd; p++) {
+        if (!pbqPositions.has(p)) {
+          position = p;
+          break;
+        }
+      }
+    }
+    
     pbqPositions.add(position);
   }
 

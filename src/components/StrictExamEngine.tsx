@@ -428,10 +428,10 @@ export function StrictExamEngine({
             <div className="flex items-center gap-2">
               <button
                 onClick={toggleFlag}
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-semibold touch-manipulation ${
                   flags.has(currentId)
                     ? 'border-warning/50 bg-warning/10 text-warning'
-                    : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground active:bg-muted'
                 }`}
               >
                 <Flag className={`h-4 w-4 ${flags.has(currentId) ? 'fill-current' : ''}`} />
@@ -440,10 +440,10 @@ export function StrictExamEngine({
               </button>
               <button
                 onClick={openReview}
-                className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground active:bg-muted touch-manipulation"
               >
                 <ListChecks className="h-4 w-4" />
-                Review
+                <span className="hidden sm:inline">Review</span>
               </button>
             </div>
           </div>
@@ -467,16 +467,16 @@ export function StrictExamEngine({
             )}
           </section>
 
-          <footer className="mt-3 flex shrink-0 items-center justify-between border-t border-border pt-3">
+          <footer className="mt-3 flex shrink-0 items-center justify-between gap-3 border-t border-border pt-3">
             <button
               onClick={() => goToQuestion(idx - 1)}
               disabled={idx === 0}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold disabled:opacity-30 hover:bg-muted"
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold disabled:opacity-30 hover:bg-muted active:bg-muted/80 touch-manipulation min-h-[44px]"
             >
-              <ChevronLeft className="h-4 w-4" /> Previous
+              <ChevronLeft className="h-4 w-4" /> <span className="hidden sm:inline">Previous</span><span className="sm:hidden">Prev</span>
             </button>
 
-            <div className="hidden text-xs text-muted-foreground sm:block">
+            <div className="hidden text-xs text-center text-muted-foreground sm:block flex-1 px-2">
               {focusViolations > 0
                 ? `Focus changes recorded: ${focusViolations}`
                 : settings.exam_pause_enabled
@@ -487,14 +487,14 @@ export function StrictExamEngine({
             {idx < questions.length - 1 ? (
               <button
                 onClick={() => goToQuestion(idx + 1)}
-                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 md:hidden"
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 active:opacity-80 touch-manipulation md:hidden min-h-[44px]"
               >
-                Next <ChevronRight className="h-4 w-4" />
+                <span className="hidden sm:inline">Next</span><span className="sm:hidden">Next</span> <ChevronRight className="h-4 w-4" />
               </button>
             ) : (
               <button
                 onClick={openReview}
-                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 md:hidden"
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 active:opacity-80 touch-manipulation md:hidden min-h-[44px]"
               >
                 Review Exam <ChevronRight className="h-4 w-4" />
               </button>
