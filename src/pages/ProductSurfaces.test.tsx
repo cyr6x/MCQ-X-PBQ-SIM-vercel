@@ -23,7 +23,7 @@ describe('live product surfaces', () => {
 
   it('renders the training command center without stale no-pause copy', async () => {
     renderPage(<DashboardPage />);
-    expect(screen.getByText('Train the weak points. Prove the result.')).toBeInTheDocument();
+    expect(screen.getByText('Master the exam. Prove your skills.')).toBeInTheDocument();
     expect(screen.getByText('Training goals')).toBeInTheDocument();
     expect(screen.queryByText(/no pause/i)).not.toBeInTheDocument();
   });

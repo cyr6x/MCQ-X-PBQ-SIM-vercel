@@ -50,7 +50,7 @@ export function buildStrictExamOrder(
   // Distribute PBQs throughout the exam, avoiding the first 5 positions and preventing clustering.
   // Each PBQ gets a segment to ensure even distribution across the full form.
   const pbqPositions = new Set<number>();
-  const firstSafePosition = 5; // Never place PBQs in first 5 questions
+  const firstSafePosition = Math.min(5, Math.floor(total / 3)); // Never place PBQs in first 5 questions (or 1/3 of total if exam is very small)
   const availablePositions = total - firstSafePosition;
   
   for (let i = 0; i < pbqOrder.length; i++) {
@@ -60,22 +60,23 @@ export function buildStrictExamOrder(
       segmentStart,
       firstSafePosition + Math.floor(((i + 1) * availablePositions) / pbqOrder.length) - 1,
     );
-    const span = segmentEnd - segmentStart + 1;
-    
-    // Try to place PBQ randomly within segment
-    let position = segmentStart + Math.floor(random() * span);
-    let attempts = 0;
-    const maxAttempts = span * 2;
     
     // Find an available position within the segment
-    while (pbqPositions.has(position) && attempts < maxAttempts) {
-      position = segmentStart + Math.floor(random() * span);
-      attempts++;
+    let position = -1;
+    const availableInSegment = [];
+    for (let p = segmentStart; p <= segmentEnd && p < total; p++) {
+      if (!pbqPositions.has(p)) {
+        availableInSegment.push(p);
+      }
     }
     
-    // Fallback: linear search if random placement failed
-    if (pbqPositions.has(position)) {
-      for (let p = segmentStart; p <= segmentEnd; p++) {
+    if (availableInSegment.length > 0) {
+      // Pick a random available position from the segment
+      const idx = Math.floor(random() * availableInSegment.length);
+      position = availableInSegment[idx];
+    } else {
+      // Fallback: find any available position from firstSafePosition onwards
+      for (let p = firstSafePosition; p < total; p++) {
         if (!pbqPositions.has(p)) {
           position = p;
           break;
@@ -83,7 +84,9 @@ export function buildStrictExamOrder(
       }
     }
     
-    pbqPositions.add(position);
+    if (position >= 0) {
+      pbqPositions.add(position);
+    }
   }
 
   const ordered: StrictUnifiedQuestion[] = [];
