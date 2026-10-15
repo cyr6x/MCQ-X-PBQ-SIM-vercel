@@ -40,6 +40,8 @@ export function PBQRenderer({
     topology: 'Network topology',
   }[q.type];
 
+  const displayTitle = examMode ? typeLabel : q.title;
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className={compact ? 'space-y-4' : 'grid gap-5 lg:grid-cols-[minmax(240px,0.72fr)_minmax(0,1.55fr)]'}>
@@ -56,7 +58,7 @@ export function PBQRenderer({
               </>
             )}
           </div>
-          <h3 className={`font-bold leading-snug ${compact ? 'text-base' : 'text-xl'}`}>{q.title}</h3>
+          <h3 className={`font-bold leading-snug ${compact ? 'text-base' : 'text-xl'}`}>{displayTitle}</h3>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{q.scenario}</p>
           {!examMode && (
             <div className="mt-5 border-t border-border pt-4 text-[10px] leading-5 text-muted-foreground">

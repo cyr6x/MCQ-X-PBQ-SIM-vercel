@@ -133,9 +133,9 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
-        eyebrow="SY0-701 training command center"
-        title="Train the weak points. Prove the result."
-        description="One loop for knowledge, applied PBQs, remediation and full exam rehearsal. Every metric below comes from your tracked sessions on this browser identity."
+        eyebrow="SY0-701 Exam Simulator"
+        title="Master the exam. Prove your skills."
+        description="Full-spectrum training system: domain drills, interactive PBQs, adaptive remediation, and exam-condition rehearsal. All metrics derived from your local session history."
         icon={<ShieldCheck className="h-4 w-4" />}
         actions={
           <StatusChip tone={cloudState === 'available' ? 'success' : cloudState === 'offline' ? 'danger' : 'muted'}>

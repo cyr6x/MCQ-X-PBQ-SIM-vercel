@@ -47,20 +47,46 @@ export function buildStrictExamOrder(
   const pbqOrder = seededShuffle(pbqs, seed + 11);
   const mcqOrder = seededShuffle(mcqs, seed + 29);
 
-  // One randomized PBQ position per segment spreads them across the full form
-  // without forcing a predictable fixed index or accidental clustering.
+  // Distribute PBQs throughout the exam, avoiding the first 5 positions and preventing clustering.
+  // Each PBQ gets a segment to ensure even distribution across the full form.
   const pbqPositions = new Set<number>();
+  const firstSafePosition = Math.min(5, Math.floor(total / 3)); // Never place PBQs in first 5 questions (or 1/3 of total if exam is very small)
+  const availablePositions = total - firstSafePosition;
+  
   for (let i = 0; i < pbqOrder.length; i++) {
-    const segmentStart = Math.floor((i * total) / pbqOrder.length);
+    // Calculate segment boundaries, offset by firstSafePosition
+    const segmentStart = firstSafePosition + Math.floor((i * availablePositions) / pbqOrder.length);
     const segmentEnd = Math.max(
       segmentStart,
-      Math.floor(((i + 1) * total) / pbqOrder.length) - 1,
+      firstSafePosition + Math.floor(((i + 1) * availablePositions) / pbqOrder.length) - 1,
     );
-    const span = segmentEnd - segmentStart + 1;
-    let position = segmentStart + Math.floor(random() * span);
-    while (pbqPositions.has(position) && position < segmentEnd) position++;
-    while (pbqPositions.has(position) && position > segmentStart) position--;
-    pbqPositions.add(position);
+    
+    // Find an available position within the segment
+    let position = -1;
+    const availableInSegment = [];
+    for (let p = segmentStart; p <= segmentEnd && p < total; p++) {
+      if (!pbqPositions.has(p)) {
+        availableInSegment.push(p);
+      }
+    }
+    
+    if (availableInSegment.length > 0) {
+      // Pick a random available position from the segment
+      const idx = Math.floor(random() * availableInSegment.length);
+      position = availableInSegment[idx];
+    } else {
+      // Fallback: find any available position from firstSafePosition onwards
+      for (let p = firstSafePosition; p < total; p++) {
+        if (!pbqPositions.has(p)) {
+          position = p;
+          break;
+        }
+      }
+    }
+    
+    if (position >= 0) {
+      pbqPositions.add(position);
+    }
   }
 
   const ordered: StrictUnifiedQuestion[] = [];

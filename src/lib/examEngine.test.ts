@@ -128,10 +128,13 @@ describe('examEngine', () => {
 
       expect(ordered).toHaveLength(90);
       expect(positions).toHaveLength(exam.pbqs.length);
-      expect(positions.some(index => index < 30)).toBe(true);
-      expect(positions.some(index => index >= 30 && index < 60)).toBe(true);
-      expect(positions.some(index => index >= 60)).toBe(true);
-      expect(positions).not.toEqual([...Array(exam.pbqs.length).keys()]);
+      // PBQs should never appear in first 5 positions
+      expect(positions.every(index => index >= 5)).toBe(true);
+      // PBQs should be distributed throughout the exam (not all clustered)
+      expect(positions.some(index => index >= 5 && index < 40)).toBe(true);
+      expect(positions.some(index => index >= 40)).toBe(true);
+      // PBQs should not be front-loaded (not sequential from position 5)
+      expect(positions).not.toEqual([...Array(exam.pbqs.length).keys()].map(i => i + 5));
     });
   });
 
