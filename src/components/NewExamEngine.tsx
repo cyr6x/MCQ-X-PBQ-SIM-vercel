@@ -164,19 +164,57 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     }
   };
 
-  // Track time per question
-  useEffect(() => {
-    setQStartTime(Date.now());
-    return () => {
-      if (!isPaused) {
-        const elapsed = Math.floor((Date.now() - qStartTime) / 1000);
-        setQuestionTimes(prev => ({
-          ...prev,
-          [qId]: (prev[qId] || 0) + elapsed
-        }));
-      }
-    };
-  }, [idx, isPaused]);
+   // Track time per question
+   useEffect(() => {
+     setQStartTime(Date.now());
+     return () => {
+       if (!isPaused) {
+         const elapsed = Math.floor((Date.now() - qStartTime) / 1000);
+         setQuestionTimes(prev => ({
+           ...prev,
+           [qId]: (prev[qId] || 0) + elapsed
+         }));
+       }
+     };
+   }, [idx, isPaused]);
+
+   // Save exam state to localStorage periodically and on unload
+   useEffect(() => {
+     const saveExamState = () => {
+       if (!submitted) {
+         const state = {
+           examData: {
+             pbqs,
+             mcqs,
+             examNumber,
+             // Note: We don't store answers here to avoid excessive storage,
+             // but we store enough to rebuild the exam
+           },
+           timestamp: Date.now()
+         };
+         try {
+           localStorage.setItem(EXAM_STATE_KEY, JSON.stringify(state));
+         } catch (e) {
+           console.warn('Failed to save exam state:', e);
+         }
+       }
+     };
+
+     // Save every 30 seconds
+     const interval = setInterval(saveExamState, 30000);
+     
+     // Save on page unload
+     const handleUnload = () => {
+       saveExamState();
+     };
+     
+     window.addEventListener('beforeunload', handleUnload);
+     
+     return () => {
+       clearInterval(interval);
+       window.removeEventListener('beforeunload', handleUnload);
+     };
+   }, [pbqs, mcqs, examNumber, submitted]);
 
   const answeredCount = useMemo(() => {
     let c = 0;

@@ -1167,25 +1167,25 @@ export const pbqBank: PBQuestion[] = [
     explanation:'Mass rename to a ransom extension, shadow-copy deletion, and a ransom note are textbook ransomware indicators; isolate, preserve evidence, then restore from offline backups.',
     objective:'4.9',
   },
-  {
-    id:'pbq-log9', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'MFA Push-Bombing Attempt',
-    scenario:'Your IdP records an unusual burst of MFA prompts for a single executive account at 3 a.m.',
-    logEntries:[
-      { line:'03:14 MFA_PUSH user=ceo device=registered status=DENIED' },
-      { line:'03:14 MFA_PUSH user=ceo device=registered status=DENIED' },
-      { line:'03:15 MFA_PUSH user=ceo device=registered status=DENIED (x32 in 90s)' },
-      { line:'03:17 MFA_PUSH user=ceo device=registered status=APPROVED src=185.220.x.x (TOR exit)' },
-    ],
-    attackTypeOptions:['Brute Force','MFA Fatigue / Push Bombing','SQL Injection','Pharming','Phishing','Insider Threat'],
-    correctAttackType:'MFA Fatigue / Push Bombing',
-    sourceIPOptions:['Tor exit node','Internal jump host','Corporate VPN','Domain controller'],
-    correctSourceIP:'Tor exit node',
-    responseOptions:['Revoke active sessions, reset credentials, switch the account to number-matching or FIDO2, and block the source','Increase the push-prompt limit','Disable MFA temporarily for the CEO','Lengthen the MFA token validity window'],
-    correctResponse:0,
-    explanation:'Repeated rejected pushes followed by an approval from a Tor exit indicate MFA push-bombing; revoke sessions, reset credentials, and move to phishing-resistant MFA.',
-    objective:'4.6',
-  },
+   {
+     id:'pbq-log9', domain:'D4', difficulty:3, type:'log-analysis',
+     title:'Unusual Authentication Activity Detected',
+     scenario:'Your IdP records an unusual burst of authentication prompts for a single executive account at 3 a.m.',
+     logEntries:[
+       { line:'03:14 AUTH_PUSH user=ceo device=registered status=DENIED' },
+       { line:'03:14 AUTH_PUSH user=ceo device=registered status=DENIED' },
+       { line:'03:15 AUTH_PUSH user=ceo device=registered status=DENIED (x32 in 90s)' },
+       { line:'03:17 AUTH_PUSH user=ceo device=registered status=APPROVED src=185.220.x.x (TOR exit)' },
+     ],
+     attackTypeOptions:['Brute Force','MFA Fatigue / Push Bombing','SQL Injection','Pharming','Phishing','Insider Threat'],
+     correctAttackType:'MFA Fatigue / Push Bombing',
+     sourceIPOptions:['Tor exit node','Internal jump host','Corporate VPN','Domain controller'],
+     correctSourceIP:'Tor exit node',
+     responseOptions:['Revoke active sessions, reset credentials, switch the account to number-matching or FIDO2, and block the source','Increase the push-prompt limit','Disable MFA temporarily for the CEO','Lengthen the MFA token validity window'],
+     correctResponse:0,
+     explanation:'Repeated rejected pushes followed by an approval from a Tor exit indicate MFA push-bombing; revoke sessions, reset credentials, and move to phishing-resistant MFA.',
+     objective:'4.6',
+   },
   {
     id:'pbq-log10', domain:'D4', difficulty:3, type:'log-analysis',
     title:'Lateral Movement via Pass-the-Hash',
@@ -1275,76 +1275,96 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
 };
 
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
-  const seed = EXAM_SEEDS[examNumber];
+   const seed = EXAM_SEEDS[examNumber];
 
-  // Pick 6 PBQs (mix of types) — seeded per exam number
-  const fwPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'firewall'),     seed).slice(0, 2);
-  const irPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'ordering'),     seed + 1).slice(0, 1);
-  const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 2).slice(0, 1);
-  const matchPbqs = seededShuffle(pbqBank.filter(p => p.type === 'matching'),   seed + 3).slice(0, 1);
-  const placePbqs = seededShuffle(pbqBank.filter(p => p.type === 'placement'),  seed + 4).slice(0, 1);
-  const pbqs = shuffle([...fwPbqs, ...irPbqs, ...logPbqs, ...matchPbqs, ...placePbqs]);
+   // Pick 6 PBQs (mix of types) — seeded per exam number
+   const fwPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'firewall'),     seed).slice(0, 2);
+   const irPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'ordering'),     seed + 1).slice(0, 1);
+   const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 2).slice(0, 1);
+   const matchPbqs = seededShuffle(pbqBank.filter(p => p.type === 'matching'),   seed + 3).slice(0, 1);
+   const placePbqs = seededShuffle(pbqBank.filter(p => p.type === 'placement'),  seed + 4).slice(0, 1);
+   const pbqs = shuffle([...fwPbqs, ...irPbqs, ...logPbqs, ...matchPbqs, ...placePbqs]);
 
-  // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
-  // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).
-  const TOTAL = 90;
-  const targetTotals: Record<Domain, number> = {
-    D1: Math.round(DOMAIN_WEIGHTS.D1 * TOTAL), // 11
-    D2: Math.round(DOMAIN_WEIGHTS.D2 * TOTAL), // 20
-    D3: Math.round(DOMAIN_WEIGHTS.D3 * TOTAL), // 16
-    D4: Math.round(DOMAIN_WEIGHTS.D4 * TOTAL), // 25
-    D5: Math.round(DOMAIN_WEIGHTS.D5 * TOTAL), // 18
-  };
-  const pbqCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
-  pbqs.forEach(p => { pbqCounts[p.domain]++; });
+   // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
+   // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).
+   const TOTAL = 90;
+   const targetTotals: Record<Domain, number> = {
+     D1: Math.round(DOMAIN_WEIGHTS.D1 * TOTAL), // 11
+     D2: Math.round(DOMAIN_WEIGHTS.D2 * TOTAL), // 20
+     D3: Math.round(DOMAIN_WEIGHTS.D3 * TOTAL), // 16
+     D4: Math.round(DOMAIN_WEIGHTS.D4 * TOTAL), // 25
+     D5: Math.round(DOMAIN_WEIGHTS.D5 * TOTAL), // 18
+   };
+   const pbqCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
+   pbqs.forEach(p => { pbqCounts[p.domain]++; });
 
-  const mcqTarget = TOTAL - pbqs.length; // 84
-  const domainCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
-  let assigned = 0;
-  (['D1','D2','D3','D4','D5'] as Domain[]).forEach(d => {
-    const need = Math.max(0, targetTotals[d] - pbqCounts[d]);
-    domainCounts[d] = need;
-    assigned += need;
-  });
-  // Fix any rounding drift so MCQ count == mcqTarget. Adjust D4 (largest pool) first.
-  let drift = mcqTarget - assigned;
-  const adjustOrder: Domain[] = ['D4','D2','D5','D3','D1'];
-  for (const d of adjustOrder) {
-    if (drift === 0) break;
-    if (drift > 0) { domainCounts[d]++; drift--; }
-    else if (domainCounts[d] > 0) { domainCounts[d]--; drift++; }
-  }
+   const mcqTarget = TOTAL - pbqs.length; // 84
+   const domainCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
+   let assigned = 0;
+   (['D1','D2','D3','D4','D5'] as Domain[]).forEach(d => {
+     const need = Math.max(0, targetTotals[d] - pbqCounts[d]);
+     domainCounts[d] = need;
+     assigned += need;
+   });
+   // Fix any rounding drift so MCQ count == mcqTarget. Adjust D4 (largest pool) first.
+   let drift = mcqTarget - assigned;
+   const adjustOrder: Domain[] = ['D4','D2','D5','D3','D1'];
+   for (const d of adjustOrder) {
+     if (drift === 0) break;
+     if (drift > 0) { domainCounts[d]++; drift--; }
+     else if (domainCounts[d] > 0) { domainCounts[d]--; drift++; }
+   }
 
-  const selectedMCQ: MCQuestion[] = [];
-  const usedIds = new Set<string>();
+   const selectedMCQ: MCQuestion[] = [];
+   const usedIds = new Set<string>();
 
-  const selectTwoByDomain: Record<Domain, MCQuestion[]> = { D1:[], D2:[], D3:[], D4:[], D5:[] };
-  mcqSelectTwo.forEach(q => selectTwoByDomain[q.domain].push(q));
+   const selectTwoByDomain: Record<Domain, MCQuestion[]> = { D1:[], D2:[], D3:[], D4:[], D5:[] };
+   mcqSelectTwo.forEach(q => selectTwoByDomain[q.domain].push(q));
 
-  for (const [domain, count] of Object.entries(domainCounts) as [Domain, number][]) {
-    if (count <= 0) continue;
-    const domainSingle    = seededShuffle(mcqSingle.filter(q => q.domain === domain), seed + domain.charCodeAt(1));
-    const domainSelectTwo = seededShuffle(selectTwoByDomain[domain],                  seed + domain.charCodeAt(1) + 50);
+   for (const [domain, count] of Object.entries(domainCounts) as [Domain, number][]) {
+     if (count <= 0) continue;
+     const domainSingle    = seededShuffle(mcqSingle.filter(q => q.domain === domain), seed + domain.charCodeAt(1));
+     const domainSelectTwo = seededShuffle(selectTwoByDomain[domain],                  seed + domain.charCodeAt(1) + 50);
 
-    // Up to 2 select-two per domain (capped at the domain's MCQ count)
-    const stPicked = domainSelectTwo.slice(0, Math.min(2, count, domainSelectTwo.length));
-    stPicked.forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
+     // Up to 2 select-two per domain (capped at the domain's MCQ count)
+     const stPicked = domainSelectTwo.slice(0, Math.min(2, count, domainSelectTwo.length));
+     stPicked.forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
 
-    // Fill remaining with single-answer
-    const remaining = count - stPicked.length;
-    domainSingle
-      .filter(q => !usedIds.has(q.id))
-      .slice(0, remaining)
-      .forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
-  }
+     // Fill remaining with single-answer
+     const remaining = count - stPicked.length;
+     domainSingle
+       .filter(q => !usedIds.has(q.id))
+       .slice(0, remaining)
+       .forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
+   }
 
+   // Scramble PBQs throughout the exam instead of putting them first
+   const allQuestions: UnifiedQ[] = [
+     ...selectedMCQ.map(q => ({ kind: 'mcq' as const, data: q })),
+     ...pbqs.map(q => ({ kind: 'pbq' as const, data: q }))
+   ];
+   
+   // Shuffle all questions together to distribute PBQs throughout the exam
+   const shuffledQuestions = shuffle(allQuestions);
+   
+   // But we need to preserve the PBQ/MCQ distinction for the engine
+   const scrambledPbqs: PBQuestion[] = [];
+   const scrambledMcqs: MCQuestion[] = [];
+   
+   shuffledQuestions.forEach(q => {
+     if (q.kind === 'pbq') {
+       scrambledPbqs.push(q.data);
+     } else {
+       scrambledMcqs.push(q.data);
+     }
+   });
 
-  return {
-    examNumber,
-    pbqs,
-    mcqs: shuffle(selectedMCQ),
-    totalQuestions: pbqs.length + selectedMCQ.length,
-  };
+   return {
+     examNumber,
+     pbqs: scrambledPbqs,
+     mcqs: scrambledMcqs,
+     totalQuestions: scrambledPbqs.length + scrambledMcqs.length,
+   };
 }
 
 export function buildStudyQuestions(domain?: Domain): MCQuestion[] {
