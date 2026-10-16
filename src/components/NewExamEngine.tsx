@@ -410,13 +410,17 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
             <Shuffle className="h-4 w-4 group-hover:rotate-12 transition-transform" />
           </button>
           {!isStudyMode && !submitted && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
               <button
                 onClick={togglePause}
-                className="p-2.5 rounded-xl border border-border bg-card hover:bg-muted transition-all text-muted-foreground hover:text-foreground group"
-                title="Pause Exam"
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-110 ${
+                  isPaused 
+                    ? 'bg-primary text-primary-foreground ring-4 ring-primary/30 shadow-lg' 
+                    : 'border-4 border-dashed border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary'
+                }`}
+                aria-label={isPaused ? 'Resume exam' : 'Pause exam'}
               >
-                <Pause className="h-4 w-4 fill-current group-hover:scale-110 transition-transform" />
+                {isPaused ? <Play className="h-8 w-8 fill-current" /> : <Pause className="h-8 w-8 fill-current" />}
               </button>
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono font-bold text-lg shadow-inner transition-colors ${
                 isWarning10 ? 'bg-destructive/10 border-destructive text-destructive animate-pulse' : 'bg-muted/50 border-border text-foreground'
