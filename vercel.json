@@ -1,4 +1,5 @@
 {
+  "name": "mcq-pbq-sim-vercel",
   "rewrites": [
     {
       "source": "/(.*)",

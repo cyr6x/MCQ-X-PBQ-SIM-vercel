@@ -1,5 +1,5 @@
 /**
- * Exam Engine — scoring, state management, and utilities
+ * Exam Engine ΓÇö scoring, state management, and utilities
  */
 
 import type { MCQuestion, PBQuestion, Domain } from '@/data/questions';
@@ -169,7 +169,7 @@ export function calculateScore(
     d.percentage = d.total > 0 ? Math.round((d.correct / d.total) * 100) : 0;
   });
 
-  // Practice scaled score only. CompTIA publishes a 100–900 reporting scale,
+  // Practice scaled score only. CompTIA publishes a 100ΓÇô900 reporting scale,
   // but not the proprietary item weighting/formula. Keep the simulator inside
   // that published range without claiming equivalence to the live score.
   const ratio = rawTotal > 0 ? rawCorrect / rawTotal : 0;

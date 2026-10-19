@@ -1,5 +1,3 @@
-import { advancedMCQs, advancedPBQs } from './advancedQuestions';
-
 /**
  * CompTIA Security+ SY0-701 Master Question Bank
  * 300+ questions: 200 MCQ single, 50 select-two, 50+ PBQ scenarios
@@ -25,10 +23,6 @@ export const DOMAIN_WEIGHTS: Record<Domain, number> = {
   D1: 0.12, D2: 0.22, D3: 0.18, D4: 0.28, D5: 0.20,
 };
 
-export type EvidenceBlock =
-  | { type: 'log' | 'terminal' | 'packet' | 'note'; title: string; lines: string[]; caption?: string }
-  | { type: 'table'; title: string; headers: string[]; rows: string[][]; caption?: string };
-
 export interface MCQuestion {
   id: string;
   domain: Domain;
@@ -41,7 +35,6 @@ export interface MCQuestion {
   whyWrong?: Record<number, string>;
   objective?: string;
   reference?: string;
-  evidence?: EvidenceBlock[];
 }
 
 /* =================================================================
@@ -111,62 +104,13 @@ export interface PBQPlacement {
   objective?: string;
 }
 
-export interface PBQTerminal {
-  id: string; domain: Domain; difficulty: 1|2|3; type: 'terminal';
-  title: string; scenario: string;
-  transcript: string[];
-  tasks: { prompt: string; options: string[]; correctIndex: number; feedback: string }[];
-  explanation: string;
-  objective?: string;
-}
-
-export interface PacketRow {
-  id: string;
-  time: string;
-  source: string;
-  destination: string;
-  protocol: string;
-  summary: string;
-}
-
-export interface PBQPacketAnalysis {
-  id: string; domain: Domain; difficulty: 1|2|3; type: 'packet-analysis';
-  title: string; scenario: string;
-  packets: PacketRow[];
-  suspiciousPacketIds: string[];
-  attackOptions: string[];
-  correctAttackType: string;
-  responseOptions: string[];
-  correctResponse: number;
-  explanation: string;
-  objective?: string;
-}
-
-export interface PBQTopology {
-  id: string; domain: Domain; difficulty: 1|2|3; type: 'topology';
-  title: string; scenario: string;
-  zones: string[];
-  nodes: { id: string; label: string; role: string; correctZone: string }[];
-  connections: [string, string][];
-  explanation: string;
-  objective?: string;
-}
-
-export type PBQuestion =
-  | PBQFirewall
-  | PBQOrdering
-  | PBQLogAnalysis
-  | PBQMatching
-  | PBQPlacement
-  | PBQTerminal
-  | PBQPacketAnalysis
-  | PBQTopology;
+export type PBQuestion = PBQFirewall | PBQOrdering | PBQLogAnalysis | PBQMatching | PBQPlacement;
 
 /* =================================================================
    MCQ BANK — 200 Single-Answer Questions
    ================================================================= */
 
-const baseMcqSingle: MCQuestion[] = [
+export const mcqSingle: MCQuestion[] = [
   // ── DOMAIN 1: General Security Concepts ──
   { id:'s1', domain:'D1', type:'single', difficulty:1, question:'Which element of the CIA triad ensures data has not been tampered with?', options:['Confidentiality','Integrity','Availability','Non-repudiation'], answer:1, explanation:'Integrity ensures data has not been altered during storage or transmission.', objective:'1.2' },
   { id:'s2', domain:'D1', type:'single', difficulty:1, question:'Using git is most frequently associated with which change management process?', options:['Backout plan','Stakeholder analysis','Version control','Standard operating procedures'], answer:2, explanation:'Git is the most widely used version control system for tracking code changes.', objective:'1.3' },
@@ -187,7 +131,7 @@ const baseMcqSingle: MCQuestion[] = [
   { id:'s17', domain:'D1', type:'single', difficulty:2, question:'A vulnerability scan shows a device has a vulnerability but the vendor is out of business. Alice places a firewall in front of it. What control type?', options:['Directive','Compensating','Detective','Procedural'], answer:1, explanation:'A compensating control is an alternative measure when the primary control cannot be implemented.', objective:'1.1' },
   { id:'s18', domain:'D1', type:'single', difficulty:1, question:'An encryption method where all participants have the same key is which type?', options:['Shared hashing','Asymmetric encryption','Symmetric encryption','Universal encryption'], answer:2, explanation:'Symmetric encryption uses the same key for both encryption and decryption.', objective:'1.4' },
   { id:'s19', domain:'D1', type:'single', difficulty:2, question:'Which obfuscation technique hides data within an image file?', options:['Steganography','Image hashing','PNG warping','Image blocking'], answer:0, explanation:'Steganography hides data within other files like images without visible changes.', objective:'1.4' },
-  { id:'s20', domain:'D5', type:'single', difficulty:2, question:"After a wave of vishing calls tricked help-desk staff into resetting executive passwords, leadership wants the MOST effective long-term mitigation. Which control should the CISO prioritize?", options:['Add another perimeter firewall','Targeted security awareness training with simulated calls','Roll out a corporate VPN','Increase password length to 16 characters'], answer:1, explanation:'Recurring, scenario-driven awareness training is the only control that directly hardens the human decision attackers exploited.', whyWrong:{0:'Firewalls do not see voice/social interactions.',2:'A VPN protects transit, not the help-desk decision being abused.',3:'Longer passwords do not stop a staffer who voluntarily resets one.'}, objective:'5.6' },
+  { id:'s20', domain:'D1', type:'single', difficulty:2, question:"After a wave of vishing calls tricked help-desk staff into resetting executive passwords, leadership wants the MOST effective long-term mitigation. Which control should the CISO prioritize?", options:['Add another perimeter firewall','Targeted security awareness training with simulated calls','Roll out a corporate VPN','Increase password length to 16 characters'], answer:1, explanation:'Recurring, scenario-driven awareness training is the only control that directly hardens the human decision attackers exploited.', whyWrong:{0:'Firewalls do not see voice/social interactions.',2:'A VPN protects transit, not the help-desk decision being abused.',3:'Longer passwords do not stop a staffer who voluntarily resets one.'}, objective:'5.6' },
 
   // ── DOMAIN 2: Threats, Vulnerabilities and Mitigations ──
   { id:'s21', domain:'D2', type:'single', difficulty:1, question:'What type of attack involves an attacker inserting themselves between two communicating parties?', options:['Phishing','On-path (Man-in-the-Middle)','SQL Injection','Cross-Site Scripting'], answer:1, explanation:'An on-path attack positions the attacker between two parties to intercept communications.', objective:'2.4' },
@@ -386,8 +330,6 @@ const baseMcqSingle: MCQuestion[] = [
   { id:'s200', domain:'D5', type:'single', difficulty:2, question:"During an M&A review, counsel says the firm performed due diligence and is now performing due care. Which statement BEST distinguishes the two?", options:['They are interchangeable','Due diligence is the investigation; due care is acting reasonably on what was learned','Due care is the investigation; due diligence is action','Both are post-incident only'], answer:1, explanation:'Due diligence gathers facts; due care is the ongoing reasonable action that follows.', whyWrong:{0:'They describe different obligations.',2:'It reverses the correct definitions.',3:'Both are continuous, not post-incident only.'}, objective:'5.1' },
 ];
 
-export const mcqSingle: MCQuestion[] = [...baseMcqSingle, ...advancedMCQs];
-
 /* =================================================================
    MCQ BANK — 50 Select-Two Questions
    ================================================================= */
@@ -450,7 +392,7 @@ export const mcqSelectTwo: MCQuestion[] = [
    PBQ BANK — 50+ Performance-Based Questions
    ================================================================= */
 
-const basePbqBank: PBQuestion[] = [
+export const pbqBank: PBQuestion[] = [
   // ── TYPE 1: FIREWALL ACL ──
   {
     id:'pbq-fw1', domain:'D4', difficulty:2, type:'firewall',
@@ -1189,7 +1131,7 @@ const basePbqBank: PBQuestion[] = [
   },
   {
     id:'pbq-log7', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'Unusual DNS Query Pattern',
+    title:'DNS Tunneling / Data Exfiltration',
     scenario:'A workstation is generating thousands of long DNS TXT lookups to an unfamiliar domain. Review the DNS logs.',
     logEntries:[
       { line:'10.10.5.22 -> dns: query TXT a8f3kd92...payload.exfil-c2.io (212 bytes)' },
@@ -1208,7 +1150,7 @@ const basePbqBank: PBQuestion[] = [
   },
   {
     id:'pbq-log8', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'File Server Anomaly Investigation',
+    title:'Ransomware Pre-Encryption Indicators',
     scenario:'A file server logs an unusual pattern just before users report being unable to open documents. Review the entries.',
     logEntries:[
       { line:'10.0.4.77 RENAME \\\\fs01\\share\\report.docx -> report.docx.lockbit' },
@@ -1225,28 +1167,28 @@ const basePbqBank: PBQuestion[] = [
     explanation:'Mass rename to a ransom extension, shadow-copy deletion, and a ransom note are textbook ransomware indicators; isolate, preserve evidence, then restore from offline backups.',
     objective:'4.9',
   },
-  {
-    id:'pbq-log9', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'Identity Provider Alert Investigation',
-    scenario:'Your IdP records an unusual burst of MFA prompts for a single executive account at 3 a.m.',
-    logEntries:[
-      { line:'03:14 MFA_PUSH user=ceo device=registered status=DENIED' },
-      { line:'03:14 MFA_PUSH user=ceo device=registered status=DENIED' },
-      { line:'03:15 MFA_PUSH user=ceo device=registered status=DENIED (x32 in 90s)' },
-      { line:'03:17 MFA_PUSH user=ceo device=registered status=APPROVED src=185.220.x.x (TOR exit)' },
-    ],
-    attackTypeOptions:['Brute Force','MFA Fatigue / Push Bombing','SQL Injection','Pharming','Phishing','Insider Threat'],
-    correctAttackType:'MFA Fatigue / Push Bombing',
-    sourceIPOptions:['Tor exit node','Internal jump host','Corporate VPN','Domain controller'],
-    correctSourceIP:'Tor exit node',
-    responseOptions:['Revoke active sessions, reset credentials, switch the account to number-matching or FIDO2, and block the source','Increase the push-prompt limit','Disable MFA temporarily for the CEO','Lengthen the MFA token validity window'],
-    correctResponse:0,
-    explanation:'Repeated rejected pushes followed by an approval from a Tor exit indicate MFA push-bombing; revoke sessions, reset credentials, and move to phishing-resistant MFA.',
-    objective:'4.6',
-  },
+   {
+     id:'pbq-log9', domain:'D4', difficulty:3, type:'log-analysis',
+     title:'Unusual Authentication Activity Detected',
+     scenario:'Your IdP records an unusual burst of authentication prompts for a single executive account at 3 a.m.',
+     logEntries:[
+       { line:'03:14 AUTH_PUSH user=ceo device=registered status=DENIED' },
+       { line:'03:14 AUTH_PUSH user=ceo device=registered status=DENIED' },
+       { line:'03:15 AUTH_PUSH user=ceo device=registered status=DENIED (x32 in 90s)' },
+       { line:'03:17 AUTH_PUSH user=ceo device=registered status=APPROVED src=185.220.x.x (TOR exit)' },
+     ],
+     attackTypeOptions:['Brute Force','MFA Fatigue / Push Bombing','SQL Injection','Pharming','Phishing','Insider Threat'],
+     correctAttackType:'MFA Fatigue / Push Bombing',
+     sourceIPOptions:['Tor exit node','Internal jump host','Corporate VPN','Domain controller'],
+     correctSourceIP:'Tor exit node',
+     responseOptions:['Revoke active sessions, reset credentials, switch the account to number-matching or FIDO2, and block the source','Increase the push-prompt limit','Disable MFA temporarily for the CEO','Lengthen the MFA token validity window'],
+     correctResponse:0,
+     explanation:'Repeated rejected pushes followed by an approval from a Tor exit indicate MFA push-bombing; revoke sessions, reset credentials, and move to phishing-resistant MFA.',
+     objective:'4.6',
+   },
   {
     id:'pbq-log10', domain:'D4', difficulty:3, type:'log-analysis',
-    title:'Suspicious Authentication Pattern',
+    title:'Lateral Movement via Pass-the-Hash',
     scenario:'Your EDR shows a workstation suddenly authenticating to multiple servers using NTLM with the same hash.',
     logEntries:[
       { line:'WS-101 -> SRV-FILE01: NTLM auth user=DOMAIN\\admin (no interactive logon recorded)' },
@@ -1264,8 +1206,6 @@ const basePbqBank: PBQuestion[] = [
     objective:'4.9',
   },
 ];
-
-export const pbqBank: PBQuestion[] = [...basePbqBank, ...advancedPBQs];
 
 /* =================================================================
    EXAM BUILDER — Constructs randomized 90-question exams
@@ -1307,29 +1247,22 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 
 // ── Shuffle answer options and remap answer index ────────────────
 export function shuffleOptions(q: MCQuestion): MCQuestion {
-  const original = q.options.map((opt, i) => ({ opt, i }));
-  const shuffled = shuffle(original);
-  const newOptions = shuffled.map(x => x.opt);
-
-  // Distractor rationale is indexed by option position. Keep it attached to the
-  // original option when answers are shuffled or post-exam review can explain
-  // the wrong distractor.
-  const newWhyWrong = q.whyWrong
-    ? Object.fromEntries(
-        shuffled.flatMap((entry, newIndex) =>
-          q.whyWrong?.[entry.i] ? [[newIndex, q.whyWrong[entry.i]]] : [],
-        ),
-      )
-    : undefined;
-
   if (q.type === 'select-two') {
-    const oldAnswers = q.answer as number[];
+    // For select-two, shuffle options and remap both answer indices
+    const original = q.options.map((opt, i) => ({ opt, i }));
+    const shuffled = shuffle(original);
+    const newOptions = shuffled.map(x => x.opt);
+    const oldAnswers = (q.answer as number[]);
     const newAnswers = oldAnswers.map(oldIdx => shuffled.findIndex(x => x.i === oldIdx));
-    return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b), whyWrong: newWhyWrong };
+    return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b) };
+  } else {
+    // Single answer
+    const original = q.options.map((opt, i) => ({ opt, i }));
+    const shuffled = shuffle(original);
+    const newOptions = shuffled.map(x => x.opt);
+    const newAnswer = shuffled.findIndex(x => x.i === (q.answer as number));
+    return { ...q, options: newOptions, answer: newAnswer };
   }
-
-  const newAnswer = shuffled.findIndex(x => x.i === (q.answer as number));
-  return { ...q, options: newOptions, answer: newAnswer, whyWrong: newWhyWrong };
 }
 
 // ── Exam seeds — each number yields a distinct, reproducible pool ─
@@ -1342,111 +1275,96 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
 };
 
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
-  const seed = EXAM_SEEDS[examNumber];
+   const seed = EXAM_SEEDS[examNumber];
 
-  // CompTIA publishes that PBQs are present, but not a fixed live-exam PBQ
-  // count. Avoid teaching candidates to expect exactly six every time.
-  const pbqTargetByExam: Record<ExamNumber, number> = { 1: 5, 2: 4, 3: 6, 4: 5, 5: 4 };
-  const pbqTarget = pbqTargetByExam[examNumber];
-  const pbqCandidates = seededShuffle(pbqBank, seed + 700);
-  const pickedPbqs: PBQuestion[] = [];
-  const seenTypes = new Set<PBQuestion['type']>();
+   // Pick 6 PBQs (mix of types) — seeded per exam number
+   const fwPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'firewall'),     seed).slice(0, 2);
+   const irPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'ordering'),     seed + 1).slice(0, 1);
+   const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 2).slice(0, 1);
+   const matchPbqs = seededShuffle(pbqBank.filter(p => p.type === 'matching'),   seed + 3).slice(0, 1);
+   const placePbqs = seededShuffle(pbqBank.filter(p => p.type === 'placement'),  seed + 4).slice(0, 1);
+   const pbqs = shuffle([...fwPbqs, ...irPbqs, ...logPbqs, ...matchPbqs, ...placePbqs]);
 
-  // First pass maximizes interaction variety, then fill from the shuffled pool.
-  for (const candidate of pbqCandidates) {
-    if (pickedPbqs.length >= pbqTarget) break;
-    if (!seenTypes.has(candidate.type)) {
-      pickedPbqs.push(candidate);
-      seenTypes.add(candidate.type);
-    }
-  }
-  for (const candidate of pbqCandidates) {
-    if (pickedPbqs.length >= pbqTarget) break;
-    if (!pickedPbqs.some(p => p.id === candidate.id)) pickedPbqs.push(candidate);
-  }
-  const pbqs = pickedPbqs;
+   // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
+   // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).
+   const TOTAL = 90;
+   const targetTotals: Record<Domain, number> = {
+     D1: Math.round(DOMAIN_WEIGHTS.D1 * TOTAL), // 11
+     D2: Math.round(DOMAIN_WEIGHTS.D2 * TOTAL), // 20
+     D3: Math.round(DOMAIN_WEIGHTS.D3 * TOTAL), // 16
+     D4: Math.round(DOMAIN_WEIGHTS.D4 * TOTAL), // 25
+     D5: Math.round(DOMAIN_WEIGHTS.D5 * TOTAL), // 18
+   };
+   const pbqCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
+   pbqs.forEach(p => { pbqCounts[p.domain]++; });
 
-  // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
-  // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).
-  const TOTAL = 90;
-  const targetTotals: Record<Domain, number> = {
-    D1: Math.round(DOMAIN_WEIGHTS.D1 * TOTAL), // 11
-    D2: Math.round(DOMAIN_WEIGHTS.D2 * TOTAL), // 20
-    D3: Math.round(DOMAIN_WEIGHTS.D3 * TOTAL), // 16
-    D4: Math.round(DOMAIN_WEIGHTS.D4 * TOTAL), // 25
-    D5: Math.round(DOMAIN_WEIGHTS.D5 * TOTAL), // 18
-  };
-  const pbqCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
-  pbqs.forEach(p => { pbqCounts[p.domain]++; });
+   const mcqTarget = TOTAL - pbqs.length; // 84
+   const domainCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
+   let assigned = 0;
+   (['D1','D2','D3','D4','D5'] as Domain[]).forEach(d => {
+     const need = Math.max(0, targetTotals[d] - pbqCounts[d]);
+     domainCounts[d] = need;
+     assigned += need;
+   });
+   // Fix any rounding drift so MCQ count == mcqTarget. Adjust D4 (largest pool) first.
+   let drift = mcqTarget - assigned;
+   const adjustOrder: Domain[] = ['D4','D2','D5','D3','D1'];
+   for (const d of adjustOrder) {
+     if (drift === 0) break;
+     if (drift > 0) { domainCounts[d]++; drift--; }
+     else if (domainCounts[d] > 0) { domainCounts[d]--; drift++; }
+   }
 
-  const mcqTarget = TOTAL - pbqs.length; // 84
-  const domainCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
-  let assigned = 0;
-  (['D1','D2','D3','D4','D5'] as Domain[]).forEach(d => {
-    const need = Math.max(0, targetTotals[d] - pbqCounts[d]);
-    domainCounts[d] = need;
-    assigned += need;
-  });
-  // Fix any rounding drift so MCQ count == mcqTarget. Adjust D4 (largest pool) first.
-  let drift = mcqTarget - assigned;
-  const adjustOrder: Domain[] = ['D4','D2','D5','D3','D1'];
-  for (const d of adjustOrder) {
-    if (drift === 0) break;
-    if (drift > 0) { domainCounts[d]++; drift--; }
-    else if (domainCounts[d] > 0) { domainCounts[d]--; drift++; }
-  }
+   const selectedMCQ: MCQuestion[] = [];
+   const usedIds = new Set<string>();
 
-  const selectedMCQ: MCQuestion[] = [];
-  const usedIds = new Set<string>();
+   const selectTwoByDomain: Record<Domain, MCQuestion[]> = { D1:[], D2:[], D3:[], D4:[], D5:[] };
+   mcqSelectTwo.forEach(q => selectTwoByDomain[q.domain].push(q));
 
-  const selectTwoByDomain: Record<Domain, MCQuestion[]> = { D1:[], D2:[], D3:[], D4:[], D5:[] };
-  mcqSelectTwo.forEach(q => selectTwoByDomain[q.domain].push(q));
+   for (const [domain, count] of Object.entries(domainCounts) as [Domain, number][]) {
+     if (count <= 0) continue;
+     const domainSingle    = seededShuffle(mcqSingle.filter(q => q.domain === domain), seed + domain.charCodeAt(1));
+     const domainSelectTwo = seededShuffle(selectTwoByDomain[domain],                  seed + domain.charCodeAt(1) + 50);
 
-  for (const [domain, count] of Object.entries(domainCounts) as [Domain, number][]) {
-    if (count <= 0) continue;
-    const domainSingleAll = mcqSingle.filter(q => q.domain === domain);
-    const domainSelectTwo = seededShuffle(selectTwoByDomain[domain], seed + domain.charCodeAt(1) + 50);
+     // Up to 2 select-two per domain (capped at the domain's MCQ count)
+     const stPicked = domainSelectTwo.slice(0, Math.min(2, count, domainSelectTwo.length));
+     stPicked.forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
 
-    // Up to 2 select-two per domain (capped at the domain's MCQ count).
-    const stPicked = domainSelectTwo.slice(0, Math.min(2, count, domainSelectTwo.length));
-    stPicked.forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
+     // Fill remaining with single-answer
+     const remaining = count - stPicked.length;
+     domainSingle
+       .filter(q => !usedIds.has(q.id))
+       .slice(0, remaining)
+       .forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
+   }
 
-    // Full simulations should bias toward applied/scenario items instead of
-    // becoming a vocabulary quiz. CompTIA does not publish a difficulty mix,
-    // so this is a calibration choice, not a claim about proprietary weighting.
-    const remaining = count - stPicked.length;
-    const appliedTarget = Math.min(
-      remaining,
-      Math.ceil(remaining * 0.8),
-    );
-    const applied = seededShuffle(
-      domainSingleAll.filter(q => q.difficulty >= 2 || Boolean(q.evidence?.length)),
-      seed + domain.charCodeAt(1),
-    )
-      .filter(q => !usedIds.has(q.id))
-      .slice(0, appliedTarget);
+   // Scramble PBQs throughout the exam instead of putting them first
+   const allQuestions: UnifiedQ[] = [
+     ...selectedMCQ.map(q => ({ kind: 'mcq' as const, data: q })),
+     ...pbqs.map(q => ({ kind: 'pbq' as const, data: q }))
+   ];
+   
+   // Shuffle all questions together to distribute PBQs throughout the exam
+   const shuffledQuestions = shuffle(allQuestions);
+   
+   // But we need to preserve the PBQ/MCQ distinction for the engine
+   const scrambledPbqs: PBQuestion[] = [];
+   const scrambledMcqs: MCQuestion[] = [];
+   
+   shuffledQuestions.forEach(q => {
+     if (q.kind === 'pbq') {
+       scrambledPbqs.push(q.data);
+     } else {
+       scrambledMcqs.push(q.data);
+     }
+   });
 
-    const appliedIds = new Set(applied.map(q => q.id));
-    const foundation = seededShuffle(
-      domainSingleAll.filter(q => !appliedIds.has(q.id)),
-      seed + domain.charCodeAt(1) + 100,
-    )
-      .filter(q => !usedIds.has(q.id))
-      .slice(0, remaining - applied.length);
-
-    [...applied, ...foundation].forEach(q => {
-      selectedMCQ.push(shuffleOptions(q));
-      usedIds.add(q.id);
-    });
-  }
-
-
-  return {
-    examNumber,
-    pbqs,
-    mcqs: shuffle(selectedMCQ),
-    totalQuestions: pbqs.length + selectedMCQ.length,
-  };
+   return {
+     examNumber,
+     pbqs: scrambledPbqs,
+     mcqs: scrambledMcqs,
+     totalQuestions: scrambledPbqs.length + scrambledMcqs.length,
+   };
 }
 
 export function buildStudyQuestions(domain?: Domain): MCQuestion[] {

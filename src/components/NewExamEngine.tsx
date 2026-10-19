@@ -1,15 +1,24 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, AlertTriangle, Clock, Pause, Play, Shuffle, LogOut } from 'lucide-react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, GripVertical, AlertTriangle, Clock, Timer, Pause, Play, Shuffle, LogOut } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { isMCQCorrect, isPBQCorrect, calculateScore, type ScoreResult } from '@/lib/examEngine';
 import { ExamResults } from '@/components/ExamResults';
-import { PBQRenderer } from '@/components/PBQRenderer';
-import { EvidenceBlocks } from '@/components/EvidenceBlocks';
 import { saveAttempt, type QuestionAttempt, type ExamAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
-import { objectiveLabel } from '@/lib/sy0701Objectives';
-import { buildStudyOrder, type StudyQuestion } from '@/lib/studyOrder';
+
+type UnifiedQ = { kind: 'pbq'; data: PBQuestion } | { kind: 'mcq'; data: MCQuestion };
+
+interface SavedExamState {
+  pbqAnswers: Record<string, any>;
+  mcqAnswers: Record<string, number | number[]>;
+  flags: Set<string>;
+  idx: number;
+  startTime: number;
+  totalPausedTime: number;
+  questionTimes: Record<string, number>;
+  order: string[] | null;
+}
 
 interface NewExamEngineProps {
   pbqs: PBQuestion[];
@@ -20,45 +29,179 @@ interface NewExamEngineProps {
   onFinish: () => void;
 }
 
+const EXAM_STATE_KEY = 'secplus-in-progress-exam';
+
 export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false, examNumber = 1, onFinish }: NewExamEngineProps) {
   // Bumped by the Shuffle button to re-randomize question order + MCQ option order.
   const [shuffleNonce, setShuffleNonce] = useState(0);
 
-  const questions = useMemo<StudyQuestion[]>(
-    () => buildStudyOrder(pbqs, mcqs),
-    // shuffleNonce intentionally requests a fresh mixed order.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pbqs, mcqs, shuffleNonce],
-  );
+  // Load saved exam state from localStorage synchronously on mount (no hook-order issues)
+  const savedState = useMemo<SavedExamState | null>(() => {
+    if (isStudyMode) return null;
+    try {
+      const saved = localStorage.getItem(EXAM_STATE_KEY);
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.examData) {
+        const savedExamNumber = parsed.examData?.examNumber || 1;
+        if (savedExamNumber === examNumber) {
+          return {
+            pbqAnswers: parsed.pbqAnswers || {},
+            mcqAnswers: parsed.mcqAnswers || {},
+            flags: new Set<string>(parsed.flags || []),
+            idx: typeof parsed.idx === 'number' && parsed.idx >= 0 ? parsed.idx : 0,
+            startTime: parsed.startTime || Date.now(),
+            totalPausedTime: parsed.totalPausedTime || 0,
+            questionTimes: parsed.questionTimes || {},
+            order: Array.isArray(parsed.order) ? parsed.order : null,
+          };
+        }
+      }
+    } catch {
+      // Corrupt saved state - discard it
+      localStorage.removeItem(EXAM_STATE_KEY);
+    }
+    return null;
+  }, [examNumber, isStudyMode]);
+
+  // Distribute PBQs evenly throughout the exam (not just at the start)
+  // Similar to the sy0-701 renovated engine approach: spread PBQs evenly
+  const questions = useMemo<UnifiedQ[]>(() => {
+    const total = pbqs.length + mcqs.length;
+    const pbqCount = pbqs.length;
+
+    if (pbqCount === 0) return mcqs.map(q => ({ kind: 'mcq' as const, data: q }));
+    if (mcqs.length === 0) return pbqs.map(q => ({ kind: 'pbq' as const, data: q }));
+
+    // On resume: restore the exact saved question order so idx stays aligned
+    if (savedState?.order) {
+      const byId = new Map<string, UnifiedQ>();
+      pbqs.forEach(q => byId.set(q.id, { kind: 'pbq', data: q }));
+      mcqs.forEach(q => byId.set(q.id, { kind: 'mcq', data: q }));
+      const restored = savedState.order
+        .map(id => byId.get(id))
+        .filter((q): q is UnifiedQ => q !== undefined);
+      if (restored.length === total) return restored;
+    }
+
+    // Spread PBQs evenly throughout the exam using interval-based positioning
+    // Similar to the sy0-701 renovated engine
+    const interval = Math.floor(total / (pbqCount + 1));
+    const pbqPositions = new Set<number>();
+    for (let i = 1; i <= pbqCount; i++) {
+      pbqPositions.add(i * interval);
+    }
+
+    // Shuffle PBQs and MCQs independently
+    const shuffledPbqs = [...pbqs].sort(() => Math.random() - 0.5);
+    const shuffledMcqs = [...mcqs].sort(() => Math.random() - 0.5);
+
+    const ordered: UnifiedQ[] = [];
+    let pbqIndex = 0;
+    let mcqIndex = 0;
+
+    for (let position = 0; position < total; position++) {
+      if (pbqPositions.has(position) && pbqIndex < shuffledPbqs.length) {
+        ordered.push({ kind: 'pbq', data: shuffledPbqs[pbqIndex++] });
+      } else if (mcqIndex < shuffledMcqs.length) {
+        ordered.push({ kind: 'mcq', data: shuffledMcqs[mcqIndex++] });
+      } else if (pbqIndex < shuffledPbqs.length) {
+        ordered.push({ kind: 'pbq', data: shuffledPbqs[pbqIndex++] });
+      }
+    }
+
+    return ordered;
+  }, [pbqs, mcqs, shuffleNonce, savedState]);
 
   const pbqCount = pbqs.length;
 
-  const [idx, setIdx] = useState(0);
-  const [pbqAnswers, setPbqAnswers] = useState<Record<string, any>>({});
-  const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>({});
-  const [flags, setFlags] = useState<Set<string>>(new Set());
+  const [idx, setIdx] = useState(savedState?.idx || 0);
+  const [pbqAnswers, setPbqAnswers] = useState<Record<string, any>>(savedState?.pbqAnswers || {});
+  const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>(savedState?.mcqAnswers || {});
+  const [flags, setFlags] = useState<Set<string>>(savedState?.flags || new Set());
   const [submitted, setSubmitted] = useState(false);
   const [showNav, setShowNav] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
-  const [warned30, setWarned30] = useState(false);
-  const [warned10, setWarned10] = useState(false);
+  const [showPbqLock, setShowPbqLock] = useState(false);
+  const [pbqSectionLocked, setPbqSectionLocked] = useState(false);
+  // When resuming, recompute remaining time from saved startTime so the
+  // timer continues exactly where it left off (wall-clock based)
+  const initialRemaining = savedState
+    ? Math.max(0, durationMinutes * 60 - Math.floor((Date.now() - savedState.startTime - savedState.totalPausedTime) / 1000))
+    : durationMinutes * 60;
+  const [warned30, setWarned30] = useState(initialRemaining <= 30 * 60);
+  const [warned10, setWarned10] = useState(initialRemaining <= 10 * 60);
   const [warningBanner, setWarningBanner] = useState<null | '30' | '10'>(null);
   
   const [isPaused, setIsPaused] = useState(false);
-  const [startTime, setStartTime] = useState(Date.now());
-  const [totalPausedTime, setTotalPausedTime] = useState(0);
+  const [startTime, setStartTime] = useState(savedState?.startTime || Date.now());
+  const [totalPausedTime, setTotalPausedTime] = useState(savedState?.totalPausedTime || 0);
   const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
-  
-  const [remaining, setRemaining] = useState(durationMinutes * 60);
+
+  const [remaining, setRemaining] = useState(initialRemaining);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [studyRevealed, setStudyRevealed] = useState<Set<string>>(new Set());
   const [qStartTime, setQStartTime] = useState(Date.now());
-  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>({});
+  const [questionTimes, setQuestionTimes] = useState<Record<string, number>>(savedState?.questionTimes || {});
 
   const cur = questions[idx];
   const qId = cur.kind === 'pbq' ? cur.data.id : cur.data.id;
+  // (PBQs are interleaved throughout `questions` — no section concept.)
 
-  // Timer logic with Pause
+  // ── Keyboard shortcuts: A/B/C/D to select MCQ answers, ← → to navigate ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when focus is inside an input/select/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (submitted || isPaused) return;
+
+      if (cur.kind === 'mcq') {
+        const keyMap: Record<string, number> = { a: 0, b: 1, c: 2, d: 3 };
+        const optIdx = keyMap[e.key.toLowerCase()];
+        if (optIdx !== undefined && optIdx < cur.data.options.length) {
+          const q = cur.data;
+          if (q.type === 'single') {
+            setMcqAnswers(p => ({ ...p, [q.id]: optIdx }));
+          } else {
+            setMcqAnswers(p => {
+              const prev = (p[q.id] as number[] | undefined) || [];
+              const next = prev.includes(optIdx) ? prev.filter(x => x !== optIdx) : [...prev, optIdx];
+              return { ...p, [q.id]: next };
+            });
+          }
+          return;
+        }
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        goTo(idx + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goTo(Math.max(0, idx - 1));
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFlag();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // goTo and toggleFlag are redefined each render but that's fine here
+  }, [cur, idx, submitted, isPaused, mcqAnswers]);
+
+  // Soft pace warning in study mode: fires if more than 1 question/min behind ideal pace
+  const [showPaceWarning, setShowPaceWarning] = useState(false);
+  useEffect(() => {
+    if (!isStudyMode) return;
+    const totalMinutes = durationMinutes || 90;
+    const elapsed = (Date.now() - startTime) / 60000;
+    const idealQ = (idx / questions.length) * totalMinutes;
+    if (elapsed > 0 && elapsed > idealQ + 1) {
+      setShowPaceWarning(true);
+      const t = setTimeout(() => setShowPaceWarning(false), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [idx]);
   useEffect(() => {
     if (isStudyMode || submitted || isPaused) return;
 
@@ -105,19 +248,62 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     }
   };
 
-  // Track time per question
-  useEffect(() => {
-    setQStartTime(Date.now());
-    return () => {
-      if (!isPaused) {
-        const elapsed = Math.floor((Date.now() - qStartTime) / 1000);
-        setQuestionTimes(prev => ({
-          ...prev,
-          [qId]: (prev[qId] || 0) + elapsed
-        }));
-      }
-    };
-  }, [idx, isPaused]);
+   // Track time per question
+   useEffect(() => {
+     setQStartTime(Date.now());
+     return () => {
+       if (!isPaused) {
+         const elapsed = Math.floor((Date.now() - qStartTime) / 1000);
+         setQuestionTimes(prev => ({
+           ...prev,
+           [qId]: (prev[qId] || 0) + elapsed
+         }));
+       }
+     };
+   }, [idx, isPaused]);
+
+   // Save exam state to localStorage periodically and on unload
+   useEffect(() => {
+     if (isStudyMode || submitted) return;
+
+     const buildState = () => ({
+       examData: { pbqs, mcqs, examNumber },
+       pbqAnswers,
+       mcqAnswers,
+       flags: [...flags],
+       idx,
+       startTime,
+       totalPausedTime,
+       questionTimes,
+       order: questions.map(q => q.data.id),
+       timestamp: Date.now()
+     });
+
+     // Coalesced writes: effect re-runs on every state change (marks dirty),
+     // flushed to localStorage at most every 2 s
+     let dirty = true;
+     const write = () => {
+       try {
+         localStorage.setItem(EXAM_STATE_KEY, JSON.stringify(buildState()));
+       } catch (e) {
+         console.warn('Failed to save exam state:', e);
+       }
+     };
+      const flush = () => {
+       if (dirty) {
+         dirty = false;
+         write();
+       }
+     };
+     const interval = setInterval(flush, 2000);
+
+     window.addEventListener('beforeunload', write);
+
+     return () => {
+       clearInterval(interval);
+       window.removeEventListener('beforeunload', write);
+     };
+   }, [pbqs, mcqs, examNumber, submitted, isStudyMode, idx, pbqAnswers, mcqAnswers, flags, startTime, totalPausedTime, questionTimes, questions]);
 
   const answeredCount = useMemo(() => {
     let c = 0;
@@ -136,17 +322,13 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const unansweredCount = questions.length - answeredCount;
 
   const handleSubmit = useCallback(() => {
-    const finalQuestionTimes = { ...questionTimes };
-    if (!isPaused && qId) {
-      const currentElapsed = Math.max(0, Math.floor((Date.now() - qStartTime) / 1000));
-      finalQuestionTimes[qId] = (finalQuestionTimes[qId] || 0) + currentElapsed;
-    }
-
     const result = calculateScore(pbqs, mcqs, pbqAnswers, mcqAnswers, startTime);
     setScoreResult(result);
     setSubmitted(true);
     setShowConfirmSubmit(false);
     setIsPaused(false);
+    // Complete exam is no longer resumable
+    localStorage.removeItem(EXAM_STATE_KEY);
 
     // Save to history
     const attemptQs: QuestionAttempt[] = [
@@ -159,7 +341,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: JSON.stringify(pbqAnswers[q.id] || {}),
         correctAnswer: '',
         explanation: q.explanation,
-        timeSpentSeconds: finalQuestionTimes[q.id] || 0,
+        timeSpentSeconds: questionTimes[q.id] || 0,
         timestamp: Date.now(),
       })),
       ...mcqs.map(q => ({
@@ -171,7 +353,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         userAnswer: mcqAnswers[q.id] !== undefined ? String(mcqAnswers[q.id]) : 'Not answered',
         correctAnswer: String(q.answer),
         explanation: q.explanation,
-        timeSpentSeconds: finalQuestionTimes[q.id] || 0,
+        timeSpentSeconds: questionTimes[q.id] || 0,
         timestamp: Date.now(),
       })),
     ];
@@ -193,13 +375,30 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
       questions: attemptQs,
       domainScores,
     });
-  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, startTime, questionTimes, isStudyMode, isPaused, qId, qStartTime]);
+  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, startTime, questionTimes, isStudyMode]);
 
   const goTo = (newIdx: number) => {
     if (isPaused) return;
     if (newIdx < 0 || newIdx >= questions.length) return;
-    if (newIdx === idx) return;
+    // PBQ-first lock: once the candidate leaves the PBQ section, they cannot return.
+    if (!isStudyMode && pbqCount > 0) {
+      const leavingPbq = idx < pbqCount && newIdx >= pbqCount;
+      const enteringPbq = idx >= pbqCount && newIdx < pbqCount;
+      if (enteringPbq && pbqSectionLocked) return; // hard block
+      if (leavingPbq && !pbqSectionLocked) {
+        setShowPbqLock(true);
+        (window as any).__pendingIdx = newIdx;
+        return;
+      }
+    }
     setIdx(newIdx);
+  };
+
+  const confirmLeavePbqs = () => {
+    setPbqSectionLocked(true);
+    setShowPbqLock(false);
+    const pending = (window as any).__pendingIdx;
+    if (typeof pending === 'number') setIdx(pending);
   };
 
   const handleShuffle = () => {
@@ -225,7 +424,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   };
 
   if (submitted && scoreResult && !isStudyMode) {
-    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} questionOrder={questions.map(q => q.data.id)} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
+    return <ExamResults score={scoreResult} pbqs={pbqs} mcqs={mcqs} pbqAnswers={pbqAnswers} mcqAnswers={mcqAnswers} flags={flags} onRestart={() => window.location.reload()} onBackToMenu={onFinish} />;
   }
 
   const timerMins = Math.floor(remaining / 60);
@@ -233,23 +432,25 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
   const timerDisplay = `${String(timerMins).padStart(2,'0')}:${String(timerSecs).padStart(2,'0')}`;
   const isWarning10 = remaining <= 600;
 
-  const advanceOrFinish = () => {
-    if (idx < questions.length - 1) {
-      goTo(idx + 1);
-      return;
-    }
-    if (isStudyMode) {
-      handleSubmit();
-      onFinish();
-      return;
-    }
-    setShowConfirmSubmit(true);
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans selection:bg-primary/20">
       
-      {/* Pause Overlay */}
+      {/* Sticky progress bar — always visible at very top */}
+      <div className="fixed top-0 left-0 right-0 z-[200] h-1 bg-muted">
+        <div
+          className="h-full bg-primary transition-all duration-500"
+          style={{ width: `${(answeredCount / questions.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Pace warning (study mode only) */}
+      {showPaceWarning && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[90] px-5 py-2.5 rounded-xl shadow-xl border border-warning bg-warning/10 text-warning font-bold text-xs flex items-center gap-2 animate-in slide-in-from-top-4">
+          <Timer className="h-4 w-4" />
+          Pace tip: try ~90 sec per question to finish on time
+          <button onClick={() => setShowPaceWarning(false)} className="ml-2 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
       {isPaused && (
         <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-md flex flex-col items-center justify-center">
           <div className="p-8 rounded-2xl bg-card border border-border shadow-2xl text-center max-w-sm mx-4">
@@ -283,6 +484,22 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 rounded-md border border-border text-sm">Continue Exam</button>
             <button onClick={handleSubmit} className="px-4 py-2 rounded-md bg-accent text-accent-foreground font-bold text-sm">Submit</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PBQ-first lock confirmation */}
+      <Dialog open={showPbqLock} onOpenChange={setShowPbqLock}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-warning" /> Leave Performance-Based Section?</DialogTitle>
+            <DialogDescription>
+              Once you leave the PBQ section to begin the multiple-choice questions, you will <strong>not be able to return</strong> to the PBQs. This mirrors the real CompTIA exam.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <button onClick={() => setShowPbqLock(false)} className="px-4 py-2 rounded-md border border-border text-sm">Stay on PBQs</button>
+            <button onClick={confirmLeavePbqs} className="px-4 py-2 rounded-md bg-warning text-warning-foreground font-bold text-sm">Continue to MCQs</button>
           </div>
         </DialogContent>
       </Dialog>
@@ -322,13 +539,17 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
             <Shuffle className="h-4 w-4 group-hover:rotate-12 transition-transform" />
           </button>
           {!isStudyMode && !submitted && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
               <button
                 onClick={togglePause}
-                className="p-2.5 rounded-xl border border-border bg-card hover:bg-muted transition-all text-muted-foreground hover:text-foreground group"
-                title="Pause Exam"
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all transform hover:scale-110 ${
+                  isPaused 
+                    ? 'bg-primary text-primary-foreground ring-4 ring-primary/30 shadow-lg' 
+                    : 'border-4 border-dashed border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary'
+                }`}
+                aria-label={isPaused ? 'Resume exam' : 'Pause exam'}
               >
-                <Pause className="h-4 w-4 fill-current group-hover:scale-110 transition-transform" />
+                {isPaused ? <Play className="h-8 w-8 fill-current" /> : <Pause className="h-8 w-8 fill-current" />}
               </button>
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono font-bold text-lg shadow-inner transition-colors ${
                 isWarning10 ? 'bg-destructive/10 border-destructive text-destructive animate-pulse' : 'bg-muted/50 border-border text-foreground'
@@ -362,13 +583,12 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
       </div>
 
       {/* Main Content Area */}
-      <div className="min-h-0 flex-1 overflow-hidden bg-background">
-        <div className="mx-auto flex h-full max-w-6xl flex-col p-3 sm:p-5">
-          <div className="min-h-0 flex flex-1 flex-col">
+      <div className="flex-1 overflow-auto bg-[#fafafa] dark:bg-background">
+        <div className="max-w-4xl mx-auto p-4 sm:p-8">
           
           {/* Progress Grid */}
           {showNav && (
-            <div className="mb-3 max-h-48 overflow-auto rounded-2xl border border-border bg-card p-4 shadow-xl animate-in slide-in-from-top-4 duration-300">
+            <div className="mb-8 p-6 rounded-2xl bg-card border border-border shadow-xl animate-in slide-in-from-top-4 duration-300">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-sm flex items-center gap-2">
                   <ListChecks className="h-4 w-4 text-primary" />
@@ -392,7 +612,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
                       title={isPBQ ? `Q${i + 1} — Performance-Based` : `Q${i + 1}`}
                       className={`relative aspect-square rounded-lg text-xs font-mono font-black transition-all ${
                         i === idx ? 'bg-primary text-primary-foreground scale-110 shadow-lg z-10' :
-                        answered ? (isPBQ ? 'bg-accent/20 text-accent border-2 border-accent/40' : 'bg-primary/10 text-primary border-2 border-primary/20') :
+                        answered ? (isPBQ ? 'bg-accent/15 text-accent border-2 border-accent/40' : 'bg-primary/10 text-primary border-2 border-primary/20') :
                         isPBQ ? 'bg-card text-foreground border-2 border-accent/40 hover:border-accent' :
                         'bg-card text-muted-foreground border border-border hover:border-primary/50'
                       }`}
@@ -407,26 +627,15 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
             </div>
           )}
 
-          <div className="min-h-0 flex flex-1 flex-col overflow-auto rounded-2xl border border-border bg-card shadow-sm">
-            <div className="flex-1 p-4 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-bold uppercase tracking-tight text-muted-foreground">
-                    {DOMAIN_LABELS[cur.data.domain]}
-                  </span>
-                  <span
-                    className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-bold text-primary"
-                    title={objectiveLabel(cur.data.objective)}
-                  >
-                    Objective {cur.data.objective || '—'}
-                  </span>
-                  <span className="rounded-full border border-border bg-background/50 px-3 py-1 text-[10px] font-bold uppercase tracking-tight text-muted-foreground">
-                    Difficulty {cur.data.difficulty}/3
-                  </span>
-                </div>
+          <div className="bg-card rounded-3xl border border-border shadow-sm min-h-[500px] flex flex-col">
+            <div className="p-6 sm:p-10 flex-1">
+              <div className="flex items-center justify-between mb-8">
+                <span className="px-3 py-1 rounded-full bg-muted text-[10px] font-bold text-muted-foreground tracking-tight uppercase">
+                  {DOMAIN_LABELS[cur.kind === 'pbq' ? cur.data.domain : cur.data.domain]}
+                </span>
                 <button 
                   onClick={toggleFlag} 
-                  className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold transition-all ${
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
                     flags.has(qId) ? 'bg-accent/10 border-accent text-accent' : 'bg-muted border-transparent text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
@@ -453,20 +662,8 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
               </div>
             )}
           </div>
-          </div>
-
         </div>
       </div>
-
-      <button
-        onClick={advanceOrFinish}
-        className="fixed right-0 top-1/2 z-[60] hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
-        aria-label={idx < questions.length - 1 ? 'Next question' : isStudyMode ? 'Finish session' : 'Submit exam'}
-        title={idx < questions.length - 1 ? 'Next question' : isStudyMode ? 'Finish session' : 'Submit exam'}
-      >
-        <span>{idx < questions.length - 1 ? 'Next' : isStudyMode ? 'Finish' : 'Submit'}</span>
-        <ChevronRight className="h-5 w-5" />
-      </button>
 
       {/* Footer Navigation */}
       <div className="bg-card border-t border-border px-4 py-4 sm:px-10 flex items-center justify-between">
@@ -492,15 +689,15 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         {idx < questions.length - 1 ? (
           <button 
             onClick={() => goTo(idx + 1)}
-            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-all shadow-lg group md:hidden"
+            className="flex items-center gap-2 px-8 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-all shadow-lg group"
           >
             Next
             <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
           </button>
         ) : (
           <button 
-            onClick={advanceOrFinish}
-            className="px-8 py-3 rounded-xl bg-accent text-accent-foreground font-black text-sm hover:opacity-90 shadow-xl transition-all uppercase tracking-widest md:hidden"
+            onClick={() => !isStudyMode ? setShowConfirmSubmit(true) : onFinish()}
+            className="px-8 py-3 rounded-xl bg-accent text-accent-foreground font-black text-sm hover:opacity-90 shadow-xl animate-pulse transition-all uppercase tracking-widest"
           >
             {isStudyMode ? 'Finish Session' : 'Submit Exam'}
           </button>
@@ -525,24 +722,15 @@ function MCQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: MCQuestio
     if (q.type === 'single') {
       onAns(i);
     } else {
-      // Select-two: cap at 2 selections. Without this cap a candidate could pick
-      // 3+ options, which can never match the 2-item answer key and always scores
-      // wrong — that read as "multi-select is broken" even though the intent was
-      // just missing enforcement of "select exactly two".
       const prev = (ans as number[] | undefined) || [];
-      if (prev.includes(i)) {
-        onAns(prev.filter(x => x !== i));
-      } else if (prev.length < 2) {
-        onAns([...prev, i]);
-      }
+      onAns(prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
     }
   };
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <h3 className="text-xl font-bold leading-relaxed mb-5">{q.question}</h3>
+      <h3 className="text-xl font-bold leading-relaxed mb-8">{q.question}</h3>
       {q.type === 'select-two' && <div className="mb-4 px-3 py-1 rounded bg-accent/10 border border-accent/20 text-accent text-[10px] font-black inline-block tracking-widest">SELECT EXACTLY TWO</div>}
-      <EvidenceBlocks evidence={q.evidence} />
       
       <div className="grid gap-3">
         {q.options.map((opt, i) => {
@@ -607,3 +795,418 @@ function MCQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: MCQuestio
     </div>
   );
 }
+
+export function PBQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: PBQuestion; ans: any; onAns: (a: any) => void; submitted: boolean; studyRevealed: boolean }) {
+  const showFeedback = submitted || studyRevealed;
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <h3 className="text-xl font-bold mb-2">{q.title}</h3>
+      <p className="text-muted-foreground text-sm mb-8 leading-relaxed italic">{q.scenario}</p>
+      
+      <div className="p-1">
+        {q.type === 'firewall' && <FirewallPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+        {q.type === 'ordering' && <OrderingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+        {q.type === 'log-analysis' && <LogAnalysisPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+        {q.type === 'matching' && <MatchingPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+        {q.type === 'placement' && <PlacementPBQ q={q} ans={ans} onAns={onAns} show={showFeedback} />}
+      </div>
+
+      {showFeedback && (
+        <div className="mt-10 p-6 rounded-2xl bg-muted/30 border border-border animate-in zoom-in-95 duration-500">
+          <div className="flex items-center gap-2 mb-3 text-primary uppercase tracking-widest font-black text-[10px]">
+            <ListChecks className="h-4 w-4" />
+            Explanation
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground">{q.explanation}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FirewallPBQ({ q, ans, onAns, show }: { q: PBQFirewall; ans: string[]; onAns: (a: string[]) => void; show: boolean }) {
+  const curr = ans?.length ? ans : q.rules.map(() => '');
+  const set = (i: number, v: string) => {
+    const n = [...curr];
+    n[i] = v;
+    onAns(n);
+  };
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+      <table className="w-full text-left border-collapse">
+        <thead className="bg-muted/50 border-b border-border">
+          <tr>
+            {['Rule','Source','Dest','Port','Proto','Action'].map(h => (
+              <th key={h} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {q.rules.map((r, i) => {
+            const ok = show && curr[i] === q.correctActions[i];
+            const bad = show && curr[i] && curr[i] !== q.correctActions[i];
+            return (
+              <tr key={i} className="hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-3 font-mono text-xs">{r.ruleId}</td>
+                <td className="px-4 py-3 font-mono text-xs">{r.sourceIP}</td>
+                <td className="px-4 py-3 font-mono text-xs">{r.destIP}</td>
+                <td className="px-4 py-3 font-mono text-xs">{r.port}</td>
+                <td className="px-4 py-3 font-mono text-xs">{r.protocol}</td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1">
+                    {['ALLOW','DENY'].map(a => (
+                      <button
+                        key={a}
+                        onClick={() => !show && set(i, a)}
+                        className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${
+                          curr[i] === a 
+                            ? (a === 'ALLOW' ? 'bg-success text-success-foreground shadow-md' : 'bg-destructive text-destructive-foreground shadow-md') 
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        {a}
+                      </button>
+                    ))}
+                    {ok && <CheckCircle2 className="ml-2 h-4 w-4 text-success" />}
+                    {bad && <div className="ml-2 flex flex-col">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <span className="text-[8px] font-bold text-success uppercase">{q.correctActions[i]}</span>
+                    </div>}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function OrderingPBQ({ q, ans, onAns, show }: { q: PBQOrdering; ans: string[]; onAns: (a: string[]) => void; show: boolean }) {
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+    const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+    const initialOrder = useMemo(() => q.steps.map(s => s.label).sort(() => Math.random() - 0.5), [q.id]);
+
+    const currentOrder: string[] = ans?.length > 0 ? ans : initialOrder;
+  if (!ans?.length && q.steps.length > 0) {
+    setTimeout(() => onAns(currentOrder), 0);
+  }
+
+  const handleDrop = (targetIdx: number) => {
+    if (dragIdx === null || show) return;
+    const next = [...currentOrder];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(targetIdx, 0, moved);
+    onAns(next);
+    setDragIdx(null);
+        setDropTargetIdx(null);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-4">
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Drag to reorder steps</span>
+      </div>
+      {currentOrder.map((step, i) => {
+        const ci = q.steps.find(s => s.label === step);
+        const ok = show && ci && ci.correctPosition === i;
+        const bad = show && ci && ci.correctPosition !== i;
+        
+        return (
+          <div
+            key={step}
+            draggable={!show}
+            onDragStart={() => setDragIdx(i)}
+                        onDragEnd={() => { setDragIdx(null); setDropTargetIdx(null); }}
+                        onDragOver={e => { e.preventDefault(); setDropTargetIdx(i); }}
+                        onDragLeave={() => setDropTargetIdx(null)}
+            onDrop={e => { e.preventDefault(); handleDrop(i); }}
+            className={`flex items-center gap-4 px-5 py-4 rounded-2xl border text-sm transition-all shadow-sm ${
+              ok ? 'bg-success/10 border-success text-success' :
+              bad ? 'bg-destructive/10 border-destructive text-destructive' :
+                              dropTargetIdx === i && dragIdx !== i ? 'border-accent bg-accent/20 scale-[1.02]' :
+              dragIdx === i ? 'border-primary bg-primary/5 opacity-50 scale-95' :
+              'border-border bg-card text-foreground hover:border-primary/40'
+            } ${!show ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : ''}`}
+          >
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono font-black text-xs ${
+              ok ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'
+            }`}>
+              {i+1}
+            </div>
+            <span className="flex-1 font-medium">{step}</span>
+            <GripVertical className="h-4 w-4 text-muted-foreground opacity-30" />
+            {ok && <CheckCircle2 className="h-4 w-4 text-success" />}
+            {bad && ci && <div className="text-right flex flex-col">
+              <XCircle className="h-4 w-4 text-destructive ml-auto" />
+              <span className="text-[10px] font-black text-success uppercase">Correct: #{ci.correctPosition+1}</span>
+            </div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LogAnalysisPBQ({ q, ans, onAns, show }: { q: PBQLogAnalysis; ans: any; onAns: (a: any) => void; show: boolean }) {
+  const current = ans || {};
+  const update = (key: string, value: any) => onAns({ ...current, [key]: value });
+
+  return (
+    <div className="space-y-8">
+      <div className="rounded-2xl border border-border bg-[#1e1e1e] p-6 shadow-xl">
+        <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+          <div className="w-3 h-3 rounded-full bg-destructive" />
+          <div className="w-3 h-3 rounded-full bg-warning" />
+          <div className="w-3 h-3 rounded-full bg-success" />
+          <span className="ml-2 text-[10px] font-mono text-white/40 font-bold uppercase tracking-widest">system_audit.log</span>
+        </div>
+        <div className="font-mono text-xs space-y-1 max-h-[250px] overflow-auto custom-scrollbar">
+          {q.logEntries.map((entry, i) => (
+            <div key={i} className="flex gap-4 hover:bg-white/5 py-0.5 group px-2 rounded">
+              <span className="text-white/20 select-none w-6 text-right group-hover:text-white/40">{i+1}</span>
+              <span className={`${entry.type === 'error' ? 'text-destructive' : entry.type === 'warning' ? 'text-warning' : 'text-white/70'}`}>
+                {entry.line}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="p-6 rounded-2xl bg-card border border-border shadow-sm">
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 block">1. Attack Identification</label>
+          <select 
+            value={current.attackType || ''} 
+            onChange={e => update('attackType', e.target.value)}
+            disabled={show}
+            className="w-full px-4 py-3 text-sm bg-muted border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium"
+          >
+            <option value="">Select attack type...</option>
+            {q.attackTypeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          {show && (
+            <div className={`mt-3 text-xs font-black uppercase tracking-tighter ${current.attackType === q.correctAttackType ? 'text-success' : 'text-destructive'}`}>
+              {current.attackType === q.correctAttackType ? '✓ Correct Identification' : `✗ Correct: ${q.correctAttackType}`}
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 rounded-2xl bg-card border border-border shadow-sm">
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 block">2. Source of Threat</label>
+          <select 
+            value={current.sourceIP || ''} 
+            onChange={e => update('sourceIP', e.target.value)}
+            disabled={show}
+            className="w-full px-4 py-3 text-sm bg-muted border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium"
+          >
+            <option value="">Select source IP...</option>
+            {q.sourceIPOptions.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          {show && (
+            <div className={`mt-3 text-xs font-black uppercase tracking-tighter ${current.sourceIP === q.correctSourceIP ? 'text-success' : 'text-destructive'}`}>
+              {current.sourceIP === q.correctSourceIP ? '✓ Correct IP' : `✗ Correct: ${q.correctSourceIP}`}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl bg-card border border-border shadow-sm">
+        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 block">3. Immediate Mitigation Action</label>
+        <div className="grid gap-3">
+          {q.responseOptions.map((opt, i) => {
+            const sel = current.response === i;
+            const correct = i === q.correctResponse;
+            let cls = 'bg-muted/50 border-border text-foreground hover:border-primary/40';
+            
+            if (show && sel && correct) cls = 'bg-success/10 border-success text-success';
+            else if (show && sel && !correct) cls = 'bg-destructive/10 border-destructive text-destructive';
+            else if (show && !sel && correct) cls = 'bg-success/5 border-success/50 text-success';
+            else if (sel) cls = 'bg-primary/10 border-primary text-foreground';
+
+            return (
+              <button
+                key={i}
+                onClick={() => !show && update('response', i)}
+                disabled={show}
+                className={`flex items-center gap-4 px-5 py-4 rounded-xl border text-sm text-left transition-all font-medium ${cls}`}
+              >
+                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center font-mono font-black text-xs ${sel ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/20 text-muted-foreground'}`}>
+                  {String.fromCharCode(65+i)}
+                </div>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MatchingPBQ({ q, ans, onAns, show }: { q: PBQMatching; ans: Record<string, string>; onAns: (a: Record<string, string>) => void; show: boolean }) {
+  const [dragItem, setDragItem] = useState<string | null>(null);
+  const handleDrop = (right: string) => {
+    if (!dragItem || show) return;
+    onAns({...ans, [dragItem]: right});
+    setDragItem(null);
+  };
+
+  const unassigned = q.items.filter(it => !Object.keys(ans || {}).includes(it.left));
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
+          <GripVertical className="h-3 w-3" />
+          Available Items
+        </h4>
+        <div className="flex flex-wrap gap-3 p-6 rounded-2xl bg-muted/30 border-2 border-dashed border-border min-h-[80px]">
+          {unassigned.map(it => (
+            <div
+              key={it.left}
+              draggable={!show}
+              onDragStart={() => setDragItem(it.left)}
+              onDragEnd={() => setDragItem(null)}
+              className={`px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-foreground shadow-sm transition-all ${
+                !show ? 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-md' : ''
+              } ${dragItem === it.left ? 'opacity-50 scale-95' : ''}`}
+            >
+              {it.left}
+            </div>
+          ))}
+          {unassigned.length === 0 && !show && <div className="text-xs font-bold text-success uppercase tracking-widest m-auto">All items assigned ✓</div>}
+        </div>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        {q.rightOptions.map(right => {
+          const assigned = q.items.filter(it => ans?.[it.left] === right);
+          return (
+            <div 
+              key={right}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('bg-primary/5', 'border-primary/50'); }}
+              onDragLeave={e => { e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); handleDrop(right); }}
+              className="group border-2 border-border rounded-2xl p-5 min-h-[120px] transition-all bg-card hover:shadow-lg"
+            >
+              <h5 className="text-xs font-black uppercase tracking-widest text-primary mb-4 border-b border-primary/10 pb-2">{right}</h5>
+              <div className="space-y-2">
+                {assigned.map(it => {
+                  const ok = show && it.correctRight === right;
+                  const bad = show && it.correctRight !== right;
+                  return (
+                    <div key={it.left} className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                      ok ? 'bg-success/10 border-success/50 text-success' : 
+                      bad ? 'bg-destructive/10 border-destructive/50 text-destructive' : 
+                      'bg-muted/50 border-border'
+                    }`}>
+                      {it.left}
+                      {!show && (
+                        <button 
+                          onClick={() => {
+                            const n = {...ans};
+                            delete n[it.left];
+                            onAns(n);
+                          }}
+                          className="p-1 hover:bg-destructive/10 rounded-lg text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {ok && <CheckCircle2 className="h-3.5 w-3.5" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PlacementPBQ({ q, ans, onAns, show }: { q: PBQPlacement; ans: Record<string, string>; onAns: (a: Record<string, string>) => void; show: boolean }) {
+  const [dragItem, setDragItem] = useState<string | null>(null);
+  const handleDrop = (zone: string) => {
+    if (!dragItem || show) return;
+    onAns({...ans, [dragItem]: zone});
+    setDragItem(null);
+  };
+
+  const unassigned = q.items.filter(it => !Object.keys(ans || {}).includes(it.label));
+
+  return (
+    <div className="space-y-10">
+      <div>
+        <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
+          <GripVertical className="h-3 w-3" />
+          Components to Place
+        </h4>
+        <div className="flex flex-wrap gap-2 p-6 rounded-2xl bg-muted/30 border-2 border-dashed border-border min-h-[80px]">
+          {unassigned.map(it => (
+            <div
+              key={it.label}
+              draggable={!show}
+              onDragStart={() => setDragItem(it.label)}
+              onDragEnd={() => setDragItem(null)}
+              className={`px-3 py-1.5 rounded-lg border border-border bg-card text-[10px] font-black text-foreground shadow-sm transition-all ${
+                !show ? 'cursor-grab active:cursor-grabbing hover:border-primary/50' : ''
+              } ${dragItem === it.label ? 'opacity-50 scale-95' : ''}`}
+            >
+              {it.label}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+        {q.zones.map(zone => {
+          const here = q.items.filter(it => ans?.[it.label] === zone);
+          return (
+            <div 
+              key={zone}
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('bg-primary/5', 'border-primary/50'); }}
+              onDragLeave={e => { e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.classList.remove('bg-primary/5', 'border-primary/50'); handleDrop(zone); }}
+              className="border-2 border-border border-dashed rounded-2xl p-5 min-h-[140px] transition-all bg-card/50 flex flex-col"
+            >
+              <h5 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2 text-center">{zone}</h5>
+              <div className="flex-1 flex flex-col gap-2">
+                {here.map(it => {
+                  const ok = show && it.correctZone === zone;
+                  const bad = show && it.correctZone !== zone;
+                  return (
+                    <div key={it.label} className={`flex items-center justify-between px-3 py-2 rounded-xl text-[10px] font-black border transition-all ${
+                      ok ? 'bg-success/10 border-success/50 text-success' : 
+                      bad ? 'bg-destructive/10 border-destructive/50 text-destructive' : 
+                      'bg-card border-border shadow-sm'
+                    }`}>
+                      {it.label}
+                      {!show && (
+                        <button onClick={() => {
+                          const n = {...ans};
+                          delete n[it.label];
+                          onAns(n);
+                        }} className="text-muted-foreground hover:text-destructive">
+                          <XCircle className="h-3 w-3" />
+                        </button>
+                      )}
+                      {ok && <CheckCircle2 className="h-3 w-3" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+import type { PBQFirewall, PBQOrdering, PBQLogAnalysis, PBQMatching, PBQPlacement } from '@/data/questions';
