@@ -12,6 +12,8 @@ vi.mock('@/lib/cloudSync', () => ({
   fetchAttempts: vi.fn(async () => []),
   pushExamAttempt: vi.fn(),
   upsertQuestionStat: vi.fn(),
+  subscribeAttempts: vi.fn(() => () => {}),
+  subscribeStats: vi.fn(() => () => {}),
 }));
 
 function renderPage(node: React.ReactNode, entry = '/') {

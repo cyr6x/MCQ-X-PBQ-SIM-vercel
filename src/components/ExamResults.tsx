@@ -12,6 +12,8 @@ interface ExamResultsProps {
   pbqAnswers: Record<string, any>;
   mcqAnswers: Record<string, number | number[]>;
   flags?: Set<string>;
+  /** original exam order of question ids — keeps numbering faithful to the run */
+  questionOrder?: string[];
   onRestart: () => void;
   onBackToMenu: () => void;
 }
@@ -25,7 +27,7 @@ const DIFF_COLOR: Record<number, string> = {
 
 export function ExamResults({
   score, pbqs, mcqs, pbqAnswers, mcqAnswers,
-  flags = new Set(), onRestart, onBackToMenu,
+  flags = new Set(), questionOrder, onRestart, onBackToMenu,
 }: ExamResultsProps) {
   const [expandedQ, setExpandedQ] = useState<string | null>(null);
   const [tab, setTab] = useState<'all' | 'failed' | 'flagged'>('failed');
@@ -75,8 +77,16 @@ export function ExamResults({
         whyWrong: whyWrongText, userAns, correctAns, flagged: flags.has(q.id),
       };
     });
-    return [...pbqItems, ...mcqItems];
-  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, flags]);
+    const items = [...pbqItems, ...mcqItems];
+    if (!questionOrder?.length) {
+      items.forEach((item, index) => { item.num = index + 1; });
+      return items;
+    }
+    const positions = new Map(questionOrder.map((id, index) => [id, index] as const));
+    return items
+      .sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+      .map((item, index) => ({ ...item, num: index + 1 }));
+  }, [pbqs, mcqs, pbqAnswers, mcqAnswers, flags, questionOrder]);
 
   const failedCount  = reviewItems.filter(i => !i.correct).length;
   const flaggedCount = reviewItems.filter(i => i.flagged).length;

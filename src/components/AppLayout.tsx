@@ -12,6 +12,7 @@ const ROUTE_META: Record<string, { title: string; kicker: string }> = {
   '/review': { title: 'Review', kicker: 'Remediation queue' },
   '/analytics': { title: 'Analytics', kicker: 'Performance intelligence' },
   '/settings': { title: 'Settings', kicker: 'Training controls' },
+  '/sim': { title: 'Exam Simulator', kicker: 'Pearson VUE format' },
 };
 
 function daysUntil(date: string | null) {
@@ -26,7 +27,9 @@ export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const meta = ROUTE_META[location.pathname] || { title: 'SecPlus Trainer', kicker: 'SY0-701' };
+  const meta = ROUTE_META[location.pathname]
+    || Object.entries(ROUTE_META).find(([key]) => key !== '/' && location.pathname.startsWith(key + '/'))?.[1]
+    || { title: 'SecPlus Trainer', kicker: 'SY0-701' };
   const examDays = daysUntil(settings.target_exam_date);
 
   return (

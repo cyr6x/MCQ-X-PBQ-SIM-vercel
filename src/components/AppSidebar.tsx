@@ -5,6 +5,7 @@ import {
   Gauge,
   History,
   Layers3,
+  MonitorPlay,
   Settings,
   ShieldCheck,
   Target,
@@ -29,6 +30,7 @@ const groups = [
     label: 'Train',
     items: [
       { title: 'Command Center', url: '/', icon: Gauge },
+      { title: 'Exam Simulator', url: '/sim', icon: MonitorPlay },
       { title: 'Study', url: '/study', icon: BookOpen },
       { title: 'PBQ Lab', url: '/pbq', icon: Layers3 },
       { title: 'Exam Simulation', url: '/exam', icon: Target },

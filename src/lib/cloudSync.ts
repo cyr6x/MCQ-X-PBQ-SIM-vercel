@@ -75,3 +75,31 @@ export async function fetchAttempts() {
   if (error) throw error;
   return data ?? [];
 }
+
+export function subscribeAttempts(onChange: () => void) {
+  const channel = cloud
+    .channel('exam_attempts:' + deviceId)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'exam_attempts' },
+      onChange
+    )
+    .subscribe();
+  return () => {
+    cloud.removeChannel(channel);
+  };
+}
+
+export function subscribeStats(onChange: () => void) {
+  const channel = cloud
+    .channel('question_stats:' + deviceId)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'question_stats' },
+      onChange
+    )
+    .subscribe();
+  return () => {
+    cloud.removeChannel(channel);
+  };
+}

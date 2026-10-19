@@ -107,8 +107,8 @@ export default function AnalyticsPage() {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" />Analytics</h1>
-          <p className="text-xs text-muted-foreground">Live performance breakdown across every attempt on this device.</p>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" />See what transfers under pressure.</h1>
+          <p className="text-xs text-muted-foreground">Full simulations drive the readiness trend when available. Study and PBQ sessions still feed coverage, repetition and weak-area signals.</p>
         </div>
       </div>
 
@@ -166,7 +166,26 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {readiness && (
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Readiness breakdown</h2>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Inputs</span>
+        </div>
+        {readiness ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Breakdown label="Recent accuracy" value={readiness.recentAccuracy} />
+            <Breakdown label="Consistency" value={readiness.consistency} />
+            <Breakdown label="Domain coverage" value={readiness.domainCoverage} />
+            <Breakdown label="Weak-domain strength" value={readiness.weakDomainStrength} />
+            <Breakdown label="Time management" value={readiness.timeManagement} />
+            <Breakdown label="Practice volume" value={readiness.volumePracticed} />
+          </div>
+        ) : (
+          <Empty body="Readiness appears after your first tracked session." />
+        )}
+      </div>
+
+      {readiness && readiness.recommendations.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Recommendations</h2>
           <ul className="space-y-2">
@@ -176,6 +195,20 @@ export default function AnalyticsPage() {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+function Breakdown({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono font-semibold">{value}</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${value}%` }} />
+      </div>
     </div>
   );
 }

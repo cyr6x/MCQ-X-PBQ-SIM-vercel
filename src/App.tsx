@@ -12,6 +12,10 @@ import ReviewPage from "./pages/ReviewPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound.tsx";
+import WelcomeScreen from "./screens/WelcomeScreen";
+import ExamScreen from "./screens/ExamScreen";
+import ResultsScreen from "./screens/ResultsScreen";
+import ReviewScreen from "./screens/ReviewScreen";
 import { SettingsProvider } from "./lib/SettingsContext";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts";
 
@@ -26,6 +30,12 @@ const App = () => (
       <HashRouter>
         <KeyboardShortcuts />
         <Routes>
+          {/* Reference-simulator flow (fullscreen screens, no app chrome) */}
+          <Route path="/sim/welcome" element={<WelcomeScreen />} />
+          <Route path="/sim/exam" element={<ExamScreen />} />
+          <Route path="/sim/results" element={<ResultsScreen />} />
+          <Route path="/sim/review" element={<ReviewScreen />} />
+
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/study" element={<StudyPage />} />
@@ -34,6 +44,7 @@ const App = () => (
             <Route path="/review" element={<ReviewPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/sim" element={<WelcomeScreen />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

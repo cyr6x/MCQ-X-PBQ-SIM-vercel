@@ -23,6 +23,10 @@ export const DOMAIN_WEIGHTS: Record<Domain, number> = {
   D1: 0.12, D2: 0.22, D3: 0.18, D4: 0.28, D5: 0.20,
 };
 
+export type EvidenceBlock =
+  | { type: 'log' | 'terminal' | 'packet' | 'note'; title: string; lines: string[]; caption?: string }
+  | { type: 'table'; title: string; headers: string[]; rows: string[][]; caption?: string };
+
 export interface MCQuestion {
   id: string;
   domain: Domain;
@@ -35,6 +39,7 @@ export interface MCQuestion {
   whyWrong?: Record<number, string>;
   objective?: string;
   reference?: string;
+  evidence?: EvidenceBlock[];
 }
 
 /* =================================================================
@@ -104,7 +109,56 @@ export interface PBQPlacement {
   objective?: string;
 }
 
-export type PBQuestion = PBQFirewall | PBQOrdering | PBQLogAnalysis | PBQMatching | PBQPlacement;
+export interface PBQTerminal {
+  id: string; domain: Domain; difficulty: 1|2|3; type: 'terminal';
+  title: string; scenario: string;
+  transcript: string[];
+  tasks: { prompt: string; options: string[]; correctIndex: number; feedback: string }[];
+  explanation: string;
+  objective?: string;
+}
+
+export interface PacketRow {
+  id: string;
+  time: string;
+  source: string;
+  destination: string;
+  protocol: string;
+  summary: string;
+}
+
+export interface PBQPacketAnalysis {
+  id: string; domain: Domain; difficulty: 1|2|3; type: 'packet-analysis';
+  title: string; scenario: string;
+  packets: PacketRow[];
+  suspiciousPacketIds: string[];
+  attackOptions: string[];
+  correctAttackType: string;
+  responseOptions: string[];
+  correctResponse: number;
+  explanation: string;
+  objective?: string;
+}
+
+export interface PBQTopology {
+  id: string; domain: Domain; difficulty: 1|2|3; type: 'topology';
+  title: string; scenario: string;
+  zones: string[];
+  nodes: { id: string; label: string; role: string; correctZone: string }[];
+  connections: [string, string][];
+  explanation: string;
+  objective?: string;
+}
+
+export type PBQuestion =
+  | PBQFirewall
+  | PBQOrdering
+  | PBQLogAnalysis
+  | PBQMatching
+  | PBQPlacement
+  | PBQTerminal
+  | PBQPacketAnalysis
+  | PBQTopology;
 
 /* =================================================================
    MCQ BANK — 200 Single-Answer Questions
@@ -136,6 +190,7 @@ export const mcqSingle: MCQuestion[] = [
   // ── DOMAIN 2: Threats, Vulnerabilities and Mitigations ──
   { id:'s21', domain:'D2', type:'single', difficulty:1, question:'What type of attack involves an attacker inserting themselves between two communicating parties?', options:['Phishing','On-path (Man-in-the-Middle)','SQL Injection','Cross-Site Scripting'], answer:1, explanation:'An on-path attack positions the attacker between two parties to intercept communications.', objective:'2.4' },
   { id:'s22', domain:'D2', type:'single', difficulty:1, question:'Which threat actor is MOST likely motivated by direct financial gain?', options:['Organized crime','Hacktivist','Nation state','Shadow IT'], answer:0, explanation:'Organized crime groups are primarily motivated by financial gain through ransomware, fraud, etc.', objective:'2.1' },
+  { id:'s22a', domain:'D2', type:'single', difficulty:2, question:'A group defaces corporate websites to protest an environmental policy. Which threat actor motivation BEST fits this activity?', options:['Hacktivist','Organized crime','Nation state','Insider'], answer:0, explanation:'Hacktivists are motivated by ideological or political causes rather than money, using attacks like website defacement and DDoS to send a message.', whyWrong:{1:'Organized crime seeks direct financial profit.',2:'Nation-state actors pursue espionage/geopolitical objectives, not protests.',3:'Insiders exploit trusted access within their own organization.'}, objective:'2.1' },
   { id:'s23', domain:'D2', type:'single', difficulty:2, question:'An attacker calls help desk pretending to be a director. What type of attack?', options:['Social engineering','Supply chain','Watering hole','On-path'], answer:0, explanation:'Social engineering manipulates people into performing actions or divulging information.', objective:'2.2' },
   { id:'s24', domain:'D2', type:'single', difficulty:1, question:'Which malware type operates entirely in memory without writing to disk?', options:['Ransomware','Fileless malware','Logic bomb','Adware'], answer:1, explanation:'Fileless malware operates in memory using legitimate tools, making it harder to detect.', objective:'2.4' },
   { id:'s25', domain:'D2', type:'single', difficulty:2, question:'445+ failed password attempts for root from one IP. What describes this?', options:['Password spraying','Downgrade attack','Brute force','DDoS'], answer:2, explanation:'Brute force attacks systematically try many passwords against a single account.', objective:'2.4' },
@@ -239,6 +294,8 @@ export const mcqSingle: MCQuestion[] = [
   { id:'s116', domain:'D3', type:'single', difficulty:2, question:'Which property of blockchain ensures data integrity?', options:['Centralized authority','Cryptographic hash chaining','Secret key sharing','Data compression'], answer:1, explanation:'Each block contains a hash of the previous block, creating a tamper-evident chain.', objective:'3.3' },
   { id:'s117', domain:'D3', type:'single', difficulty:2, question:'Which is a security concern unique to IPv6?', options:['No encryption','Dual-stack creating bypass paths','Cannot use firewalls','Shorter addresses'], answer:1, explanation:'Dual-stack (IPv4+IPv6) can create unmonitored IPv6 paths bypassing IPv4 controls.', objective:'3.2' },
   { id:'s118', domain:'D4', type:'single', difficulty:2, question:'Deploying a company app to field employees with various devices. Which model?', options:['CYOD','SSO','COPE','BYOD'], answer:2, explanation:'COPE (Corporate-Owned, Personally Enabled) gives company control while allowing personal use.', objective:'4.2' },
+  { id:'s118a', domain:'D4', type:'single', difficulty:1, question:'A technician wipes decommissioned hard drives with a utility that overwrites every sector before disposal. Which asset-management practice does this satisfy?', options:['Media sanitization','Chain of custody','Data masking','Tokenization'], answer:0, explanation:'Proper media sanitization (overwriting/wiping or shredding) prevents data remanence on retired hardware, a core asset-disposal control.', whyWrong:{1:'Chain of custody applies to evidence handling, not asset disposal.',2:'Data masking transforms live data in non-production environments.',3:'Tokenization replaces sensitive values with tokens in processing systems.'}, objective:'4.2' },
+  { id:'s118b', domain:'D4', type:'single', difficulty:2, question:'An auditor finds unencrypted USB drives containing customer PII were shipped to a branch office. Which asset-management control would have BEST prevented this exposure?', options:['Enforcing encryption on removable media','Installing a host firewall','Rotating service account passwords','Enabling MAC filtering'], answer:0, explanation:'Data asset management requires controlling how data-bearing assets are stored and moved; enforcing encryption on removable media protects data in transit/at rest.', whyWrong:{1:'A host firewall protects against network threats, not lost media.',2:'Password rotation is identity management, unrelated to removable media.',3:'MAC filtering governs network access, not USB storage.'}, objective:'4.2' },
   { id:'s119', domain:'D4', type:'single', difficulty:2, question:'Which cloud tool provides visibility into sanctioned and unsanctioned app usage?', options:['WAF','CASB','IDS','NAC'], answer:1, explanation:'A CASB monitors and controls cloud application usage.', objective:'4.4' },
   { id:'s120', domain:'D5', type:'single', difficulty:2, question:'A company wants to provide website login using existing credentials from a third-party. Best approach?', options:['Federation','802.1X','EAP','SSO'], answer:0, explanation:'Federation allows using credentials from another organization through trust relationships.', objective:'5.3' },
   // More D2 questions
@@ -264,6 +321,7 @@ export const mcqSingle: MCQuestion[] = [
   { id:'s136', domain:'D3', type:'single', difficulty:2, question:'Brian\'s organization uses a secure module that validates each signed boot stage. What is it called?', options:['Secure initiation manager','Root of trust','Boot hash','Cryptographic boot manager'], answer:1, explanation:'A root of trust is the foundation of the secure boot chain of verification.', objective:'3.2' },
   { id:'s137', domain:'D1', type:'single', difficulty:2, question:'What change management term describes the consistent process used for each change?', options:['Standard operating procedures','Change plan','Fixed operating procedures','Backout plan'], answer:0, explanation:'SOPs ensure a consistent process is followed for every change.', objective:'1.3' },
   { id:'s138', domain:'D5', type:'single', difficulty:2, question:'Gap analysis examines what?', options:['Misconfigured services','Unpatched systems','Security program vs best practices','Legal requirements vs program'], answer:2, explanation:'Gap analysis compares the current security program against best practices or standards.', objective:'5.5' },
+  { id:'s138a', domain:'D5', type:'single', difficulty:1, question:'Which audit type is performed by an independent assessor with no financial stake in the outcome?', options:['Internal audit','External audit','Self-assessment','Demonstration'], answer:1, explanation:'External audits are conducted by independent third parties, adding credibility to compliance claims.', whyWrong:{0:'Internal audits are performed by the organization itself.',2:'Self-assessments are informal checks run by the owner of the system.',3:'A demonstration shows a control works; it is not an independent audit.'}, objective:'5.5' },
   { id:'s139', domain:'D1', type:'single', difficulty:2, question:'Renee wants logs to support nonrepudiation. What should she do?', options:['Encrypt then hash','Hash then digitally sign','Digitally sign then encrypt','Hash then encrypt'], answer:1, explanation:'Hashing then digitally signing provides integrity and nonrepudiation.', objective:'1.4' },
   { id:'s140', domain:'D3', type:'single', difficulty:2, question:'Christina wants a physical control with greatest flexibility for exceptions. Which?', options:['Video surveillance','Security guards','Access badges','Access control vestibules'], answer:1, explanation:'Security guards provide the most flexibility as they can make judgment calls.', objective:'3.1' },
   { id:'s141', domain:'D4', type:'single', difficulty:2, question:"In a NIST zero-trust architecture, which component evaluates contextual signals against policy to grant or deny each request?", options:['Policy Administrator','Policy Engine','Policy Enforcement Point','Trust Algorithm'], answer:1, explanation:'The Policy Engine renders the access decision; the Administrator and PEP execute it.', whyWrong:{0:'The Administrator implements decisions, it does not make them.',2:'The PEP enforces the decision at the connection point.',3:'The trust algorithm is the logic the engine uses, not the component itself.'}, objective:'4.6' },
@@ -312,6 +370,7 @@ export const mcqSingle: MCQuestion[] = [
   { id:'s182', domain:'D3', type:'single', difficulty:2, question:"A platform team wants infrastructure changes to be peer-reviewed in pull requests and reproducible across environments. Which approach BEST supports this?", options:['Manual configuration through the cloud console','Infrastructure as Code (IaC) with templates in version control','Ad-hoc SSH scripts run by admins','Documenting steps in a wiki'], answer:1, explanation:'IaC files in version control enable review, reproducibility, and rollback.', whyWrong:{0:'Console clicks are not reviewable or reproducible.',2:'Ad-hoc SSH lacks audit trail and review.',3:'Wikis document but do not enforce reproducibility.'}, objective:'3.1' },
   { id:'s183', domain:'D4', type:'single', difficulty:2, question:"A network engineer must deploy a sensor that can BLOCK malicious packets, not merely log them. Where should the sensor be placed?", options:['Off a SPAN port for passive capture','Inline in the traffic path','On the management VLAN only','On a remote analyst workstation'], answer:1, explanation:'Only an inline placement allows the sensor (IPS) to drop offending packets in real time.', whyWrong:{0:'SPAN-port placement is passive; the original packet has already passed.',2:'Management VLAN placement misses production traffic.',3:'Analyst workstations cannot enforce inline.'}, objective:'4.5' },
   { id:'s184', domain:'D5', type:'single', difficulty:2, question:"After repeated phishing-driven incidents, leadership funds an awareness program. Which outcome BEST justifies the spend?", options:['Eliminating the need for email filtering','Measurable reduction in user click rates on simulated phishing','Replacing MFA enrollment','Removing endpoint antivirus'], answer:1, explanation:'Tracking simulated-phish click-rate reductions ties training to a quantifiable risk metric.', whyWrong:{0:'Awareness complements, not replaces, email filtering.',2:'MFA addresses credential abuse, not user judgement.',3:'AV addresses malware execution, not human click decisions.'}, objective:'5.6' },
+  { id:'s184a', domain:'D5', type:'single', difficulty:1, question:'An organization wants employees to escalate suspicious emails to security quickly. Which awareness practice BEST supports this?', options:['A one-click email reporting button','Longer password expiration policies','Disabling the help desk portal','Annual generic security memo'], answer:0, explanation:'Frictionless reporting (one-click button) drives rapid user escalation and gives analysts early phishing signals.', whyWrong:{1:'Password expiration affects credential hygiene, not reporting.',2:'Disabling the help desk removes a reporting channel.',3:'Annual memos are too infrequent to reinforce timely reporting habits.'}, objective:'5.6' },
   { id:'s185', domain:'D2', type:'single', difficulty:3, question:"A web app checks if a file exists, then opens it as root moments later. An attacker swaps the file in the gap and reads /etc/shadow. Which class of vulnerability is this?", options:['SQL injection','Race condition (TOCTOU)','Buffer overflow','Cross-site scripting'], answer:1, explanation:'A time-of-check to time-of-use race lets the attacker change state between the check and the action.', whyWrong:{0:'SQLi targets queries, not file handles.',2:'Buffer overflows corrupt memory layout.',3:'XSS injects script into pages.'}, objective:'2.3' },
   { id:'s186', domain:'D3', type:'single', difficulty:2, question:"A QA team needs realistic-looking customer records to test reporting but must not expose real PII. Which control BEST satisfies this?", options:['Full-disk encryption on the QA hosts','Data masking that replaces PII with realistic synthetic values','TLS between app and database','Hashing of all customer fields'], answer:1, explanation:'Masking provides realistic but non-sensitive data so testing is meaningful without PII exposure.', whyWrong:{0:'FDE protects data at rest but does not de-identify it.',2:'TLS protects transit, not the dataset values.',3:'Hashing destroys the realism QA needs.'}, objective:'3.3' },
   { id:'s187', domain:'D4', type:'single', difficulty:2, question:'What type of backup captures the current state of an entire system?', options:['Incremental','Differential','Snapshot','Archive'], answer:2, explanation:'Snapshots capture the complete state of a system at a point in time.', objective:'4.1' },
@@ -1254,14 +1313,20 @@ export function shuffleOptions(q: MCQuestion): MCQuestion {
     const newOptions = shuffled.map(x => x.opt);
     const oldAnswers = (q.answer as number[]);
     const newAnswers = oldAnswers.map(oldIdx => shuffled.findIndex(x => x.i === oldIdx));
-    return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b) };
+    const newWhyWrong = q.whyWrong
+      ? Object.fromEntries(shuffled.map((x, ni) => [ni, q.whyWrong![x.i]]).filter(([, v]) => v !== undefined))
+      : undefined;
+    return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b), ...(newWhyWrong ? { whyWrong: newWhyWrong } : {}) };
   } else {
     // Single answer
     const original = q.options.map((opt, i) => ({ opt, i }));
     const shuffled = shuffle(original);
     const newOptions = shuffled.map(x => x.opt);
     const newAnswer = shuffled.findIndex(x => x.i === (q.answer as number));
-    return { ...q, options: newOptions, answer: newAnswer };
+    const newWhyWrong = q.whyWrong
+      ? Object.fromEntries(shuffled.map((x, ni) => [ni, q.whyWrong![x.i]]).filter(([, v]) => v !== undefined))
+      : undefined;
+    return { ...q, options: newOptions, answer: newAnswer, ...(newWhyWrong ? { whyWrong: newWhyWrong } : {}) };
   }
 }
 
@@ -1273,6 +1338,8 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
   4: 2024,
   5: 7331,
 };
+
+type UnifiedQ = { kind: 'mcq'; data: MCQuestion } | { kind: 'pbq'; data: PBQuestion };
 
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
    const seed = EXAM_SEEDS[examNumber];

@@ -5,9 +5,14 @@ import { loadHistory, loadQuestionStats, getStudyStreak, getActivityHeatmap } fr
 import { calculateReadiness } from '@/lib/readiness';
 import { fetchAttempts, subscribeAttempts, subscribeStats } from '@/lib/cloudSync';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
+import { useSettings } from '@/lib/SettingsContext';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const [tick, setTick] = useState(0); // re-render on cloud changes
   const [cloudCount, setCloudCount] = useState<number | null>(null);
   const [cloudOk, setCloudOk] = useState<boolean | null>(null);
@@ -36,9 +41,19 @@ export default function DashboardPage() {
     return totalAnswered > 0 ? Math.round((correct / totalAnswered) * 100) : 0;
   }, [stats, totalAnswered]);
 
+  const weeklyQuestions = useMemo(
+    () => history.filter(a => Date.now() - a.endTime < WEEK_MS).reduce((s, a) => s + (a.totalQuestions || a.questions?.length || 0), 0),
+    [history]
+  );
+  const todayMinutes = useMemo(
+    () => history.filter(a => Date.now() - a.endTime < DAY_MS).reduce((s, a) => s + (a.endTime - a.startTime) / 60000, 0),
+    [history]
+  );
+  const weeklyPct = Math.min(100, Math.round((weeklyQuestions / Math.max(1, settings.weekly_question_target)) * 100));
+  const dailyPct = Math.min(100, Math.round((todayMinutes / Math.max(1, settings.daily_minutes_goal)) * 100));
+
   const domainPerf = useMemo(() => {
-    const map: Record<string, { correct: number; total: number }> = {};
-    Object.values(stats).forEach((s) => {
+    const map: Record<string, { correct: number; total: number }> = {};    Object.values(stats).forEach((s) => {
       if (!map[s.domain]) map[s.domain] = { correct: 0, total: 0 };
       map[s.domain].correct += s.timesCorrect;
       map[s.domain].total += s.timesAttempted;
@@ -70,7 +85,7 @@ export default function DashboardPage() {
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
           <Shield className="w-5 h-5 text-primary" />
-          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <h1 className="text-2xl font-bold">Master the exam. Prove your skills.</h1>
           <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border border-border bg-card">
             <span className={`w-1.5 h-1.5 rounded-full ${cloudOk === true ? 'bg-success animate-pulse' : cloudOk === false ? 'bg-destructive' : 'bg-muted-foreground'}`} />
             {cloudOk === true ? 'CLOUD SYNCED' : cloudOk === false ? 'OFFLINE' : 'CONNECTING…'}
@@ -139,6 +154,28 @@ export default function DashboardPage() {
           onClick={() => navigate('/pbq')}
           accent="accent"
         />
+      </div>
+
+      {/* Training goals */}
+      <div className="bg-card border border-border rounded-xl p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Training goals</h2>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">This week</span>
+        </div>
+        <div className="space-y-4">
+          <GoalMeter
+            value={weeklyPct}
+            left="Questions"
+            right={`${weeklyQuestions} / ${settings.weekly_question_target}`}
+            tone={weeklyPct >= 100 ? 'bg-success' : 'bg-primary'}
+          />
+          <GoalMeter
+            value={dailyPct}
+            left="Active minutes today"
+            right={`${Math.round(todayMinutes)} / ${settings.daily_minutes_goal}`}
+            tone={dailyPct >= 100 ? 'bg-success' : 'bg-primary'}
+          />
+        </div>
       </div>
 
       {/* Domain performance */}
@@ -226,6 +263,22 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function GoalMeter({
+  value, left, right, tone,
+}: { value: number; left: string; right: string; tone: 'bg-success' | 'bg-primary' }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-1.5">
+        <span className="text-muted-foreground">{left}</span>
+        <span className="font-mono font-semibold">{right}</span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full transition-all ${tone}`} style={{ width: `${value}%` }} />
       </div>
     </div>
   );
