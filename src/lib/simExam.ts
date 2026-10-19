@@ -269,7 +269,7 @@ function hasAttempt(answer: unknown): boolean {
   return true;
 }
 
-const TYPE_LABELS: Record<PBQuestion['type'], string> = {
+export const TYPE_LABELS: Record<PBQuestion['type'], string> = {
   firewall: 'Firewall policy',
   ordering: 'Sequence / workflow',
   'log-analysis': 'SIEM / log analysis',
@@ -331,7 +331,7 @@ export function computeResult(items: SimItem[], state: SimState): SimResult {
       domainLabel,
       questionText: q.title,
       userAnswerText: pbqAnswerText(q, ans),
-      correctAnswerText: 'Model solution (see review detail)',
+      correctAnswerText: `All ${credit.total} subtasks completed correctly — see Explanation below`,
       isCorrect: credit.ratio === 1,
       flagged: flagSet.has(item.id),
       explanation: q.explanation ?? '',

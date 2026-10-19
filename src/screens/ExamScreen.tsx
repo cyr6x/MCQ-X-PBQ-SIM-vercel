@@ -21,6 +21,7 @@ import {
   saveSimState,
   computeResult,
   saveSimResult,
+  TYPE_LABELS,
   type SimConfig,
   type SimItem,
   type SimState,
@@ -55,7 +56,12 @@ export default function ExamScreen() {
   const [showEndModal, setShowEndModal] = useState(false);
   const [showTimeWarn, setShowTimeWarn] = useState(false);
   const [checkedPbqIds, setCheckedPbqIds] = useState<Set<string>>(new Set());
-  const [remaining, setRemaining] = useState(EXAM_DURATION_SECONDS);
+  const [remaining, setRemaining] = useState(() => {
+    const s = bootstrap?.state;
+    if (!s) return EXAM_DURATION_SECONDS;
+    const elapsed = Math.floor((Date.now() - s.startedAt) / 1000);
+    return Math.max(0, EXAM_DURATION_SECONDS - elapsed);
+  });
   const timeWarnedRef = useRef(false);
 
   const cfg: SimConfig | undefined = state?.cfg;
@@ -151,7 +157,7 @@ export default function ExamScreen() {
 
   const domainLabel = DOMAIN_LABELS[(cur.q as any).domain as Domain] ?? '';
   const typeLabel = cur.kind === 'pbq'
-    ? ({ firewall: 'Firewall', ordering: 'Sequence', 'log-analysis': 'Log Analysis', matching: 'Matching', placement: 'Placement' } as Record<string, string>)[(cur.q as PBQuestion).type]
+    ? TYPE_LABELS[(cur.q as PBQuestion).type]
     : ((cur.q as MCQuestion).type === 'select-two' ? 'Multiple Select — choose 2' : 'Single Choice');
   const curAnswer = answers[cur.id];
   const curFlagged = flags.has(cur.id);
