@@ -8,34 +8,9 @@ import {
   type PBQuestion,
 } from '@/data/questions';
 import { buildStrictExamOrder } from '@/lib/strictExamOrder';
-import { calculateScore, getPBQCredit, isMCQCorrect } from '@/lib/examEngine';
+import { calculateScore, getPBQCredit, getPBQModelAnswer, isMCQCorrect } from '@/lib/examEngine';
 import { SY0701_OBJECTIVE_LABELS } from '@/lib/sy0701Objectives';
 import { buildStudyOrder } from '@/lib/studyOrder';
-
-function modelPBQAnswer(q: PBQuestion): unknown {
-  switch (q.type) {
-    case 'firewall':
-      return [...q.correctActions];
-    case 'ordering':
-      return [...q.steps].sort((a, b) => a.correctPosition - b.correctPosition).map((step) => step.label);
-    case 'log-analysis':
-      return { attackType: q.correctAttackType, sourceIP: q.correctSourceIP, response: q.correctResponse };
-    case 'matching':
-      return Object.fromEntries(q.items.map((item) => [item.left, item.correctRight]));
-    case 'placement':
-      return Object.fromEntries(q.items.map((item) => [item.label, item.correctZone]));
-    case 'terminal':
-      return q.tasks.map((task) => task.correctIndex);
-    case 'packet-analysis':
-      return {
-        packetIds: [...q.suspiciousPacketIds],
-        attackType: q.correctAttackType,
-        response: q.correctResponse,
-      };
-    case 'topology':
-      return Object.fromEntries(q.nodes.map((node) => [node.id, node.correctZone]));
-  }
-}
 
 function wrongMCQAnswer(q: MCQuestion): number | number[] {
   if (q.type === 'select-two') return [];
@@ -75,7 +50,7 @@ describe('full training journey whitebox', () => {
     });
 
     pbqBank.forEach((q) => {
-      expect(getPBQCredit(q, modelPBQAnswer(q)).ratio).toBe(1);
+      expect(getPBQCredit(q, getPBQModelAnswer(q)).ratio).toBe(1);
     });
   });
 
@@ -130,7 +105,7 @@ describe('full training journey whitebox', () => {
 
     const pbqAnswers: Record<string, unknown> = {};
     exam.pbqs.forEach((q, index) => {
-      pbqAnswers[q.id] = index === 0 ? undefined : modelPBQAnswer(q);
+      pbqAnswers[q.id] = index === 0 ? undefined : getPBQModelAnswer(q);
     });
 
     const result = calculateScore(exam.pbqs, exam.mcqs, pbqAnswers, mcqAnswers, Date.now());

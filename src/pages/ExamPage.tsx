@@ -16,7 +16,7 @@ import {
 import { buildExam, EXAM_SETS, type ExamNumber } from '@/data/questions';
 import { useSettings } from '@/lib/SettingsContext';
 import { useProgressSnapshot } from '@/hooks/useProgressSnapshot';
-import { PageHeader, Panel, StatusChip } from '@/components/product/ProductUI';
+import { PageHeader, Panel, StatusChip, primaryButtonClass, secondaryButtonClass } from '@/components/product/ProductUI';
 
 function formatClock(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -122,7 +122,7 @@ export default function ExamPage() {
             </div>
             <button
               onClick={resumeExam}
-              className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90"
+              className={primaryButtonClass}
             >
               Resume Exam {resume.examNumber}
             </button>
@@ -131,7 +131,7 @@ export default function ExamPage() {
                 clearExamSnapshot();
                 setResume(null);
               }}
-              className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+              className={secondaryButtonClass}
             >
               Discard
             </button>
@@ -163,11 +163,11 @@ export default function ExamPage() {
                     : 'border-border bg-background/50 text-muted-foreground hover:border-primary/40 hover:text-foreground'
                 }`}
               >
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-70">
+                <div className="text-[10px] font-bold uppercase tracking-wider opacity-70">
                   {set.kind === 'balanced' ? 'Exam' : 'Focus'}
                 </div>
                 <div className="mt-1 font-mono text-xl font-semibold">{set.number}</div>
-                <div className="mt-0.5 text-[9px] font-medium opacity-80">{set.blurb}</div>
+                <div className="mt-0.5 text-[10px] font-medium opacity-80">{set.blurb}</div>
               </button>
             ))}
           </div>
@@ -201,7 +201,7 @@ export default function ExamPage() {
 
             <button
               onClick={startExam}
-              className="mt-5 w-full rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+              className={`mt-5 w-full ${primaryButtonClass}`}
             >
               Start Exam {selectedDef.number}
             </button>
@@ -245,7 +245,7 @@ function ExamSetting({ label, value }: { label: string; value: string }) {
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-muted/25 p-3">
-      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 font-mono text-lg font-semibold">{value}</div>
     </div>
   );

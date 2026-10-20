@@ -49,10 +49,10 @@ export function PBQRenderer({
           <div className="mb-4 flex flex-wrap gap-2">
             {!examMode && (
               <>
-                <span className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-accent">
+                <span className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-accent">
                   {typeLabel}
                 </span>
-                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-muted-foreground">
                   Difficulty {q.difficulty}/3
                 </span>
               </>
@@ -627,7 +627,7 @@ function PacketAnalysisPBQ({ q, ans, onAns, show }: { q: PBQPacketAnalysis; ans:
             <thead className="bg-background/40">
               <tr>
                 {['Sel', 'No.', 'Time', 'Source', 'Destination', 'Proto', 'Info'].map(h => (
-                  <th key={h} className="border-b border-border px-3 py-2 text-[9px] font-black uppercase tracking-wider text-muted-foreground">{h}</th>
+                  <th key={h} className="border-b border-border px-3 py-2 text-[10px] font-black uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>

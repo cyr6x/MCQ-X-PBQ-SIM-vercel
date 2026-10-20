@@ -70,7 +70,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-sm font-bold tracking-tight">SecPlus Trainer</div>
-              <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">SY0-701 · Training OS</div>
+              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">SY0-701 · Training OS</div>
             </div>
           )}
         </NavLink>
@@ -81,7 +81,7 @@ export function AppSidebar() {
       <SidebarContent className="px-1 py-2">
         {groups.map((group) => (
           <SidebarGroup key={group.label} className="py-2">
-            <SidebarGroupLabel className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+            <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               {group.label}
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -127,7 +127,7 @@ export function AppSidebar() {
         </SidebarMenu>
         {!collapsed && (
           <div className="mt-2 rounded-xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-2.5">
-            <div className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Training principle</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Training principle</div>
             <p className="mt-1 text-[11px] leading-4 text-sidebar-foreground/75">
               Learn the miss. Retest it. Then prove it under time.
             </p>

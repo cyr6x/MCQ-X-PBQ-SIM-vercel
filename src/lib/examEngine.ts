@@ -121,6 +121,132 @@ export function isPBQCorrect(q: PBQuestion, ans: any): boolean {
   return getPBQCredit(q, ans).ratio === 1;
 }
 
+/**
+ * Model solution for a PBQ, rendered as label → value rows. Shared by the
+ * results screen and the training-journey characterization test so the
+ * displayed key can never drift from the credited key.
+ */
+export function getPBQModelAnswer(q: PBQuestion): unknown {
+  switch (q.type) {
+    case 'firewall':
+      return [...q.correctActions];
+    case 'ordering':
+      return [...q.steps].sort((a, b) => a.correctPosition - b.correctPosition).map((step) => step.label);
+    case 'log-analysis':
+      return { attackType: q.correctAttackType, sourceIP: q.correctSourceIP, response: q.correctResponse };
+    case 'matching':
+      return Object.fromEntries(q.items.map((item) => [item.left, item.correctRight]));
+    case 'placement':
+      return Object.fromEntries(q.items.map((item) => [item.label, item.correctZone]));
+    case 'terminal':
+      return q.tasks.map((task) => task.correctIndex);
+    case 'packet-analysis':
+      return {
+        packetIds: [...q.suspiciousPacketIds],
+        attackType: q.correctAttackType,
+        response: q.correctResponse,
+      };
+    case 'topology':
+      return Object.fromEntries(q.nodes.map((node) => [node.id, node.correctZone]));
+  }
+}
+
+function responseLabel(value: unknown): string {
+  if (value === 0) return 'Block / isolate';
+  if (value === 1) return 'Allow / monitor';
+  return String(value ?? '—');
+}
+
+/** Row strings describing the credited answer, one per explicit subtask. */
+export function getPBQModelRows(q: PBQuestion): string[] {
+  switch (q.type) {
+    case 'firewall':
+      return q.rules.map((rule, i) =>
+        `${rule.sourceIP} → ${rule.destIP}:${rule.port}/${rule.protocol} = ${q.correctActions[i] ?? '—'}`);
+    case 'ordering':
+      return [...q.steps]
+        .sort((a, b) => a.correctPosition - b.correctPosition)
+        .map((step, i) => `${i + 1}. ${step.label}`);
+    case 'log-analysis':
+      return [
+        `Attack type = ${q.correctAttackType}`,
+        `Source IP = ${q.correctSourceIP}`,
+        `Response = ${responseLabel(q.correctResponse)}`,
+      ];
+    case 'matching':
+      return q.items.map((item) => `${item.left} → ${item.correctRight}`);
+    case 'placement':
+      return q.items.map((item) => `${item.label} → ${item.correctZone}`);
+    case 'terminal':
+      return q.tasks.map((task, i) => (task.label ? `${task.label} = ${task.correctIndex}` : `Option ${i + 1} = ${task.correctIndex}`));
+    case 'packet-analysis':
+      return [
+        `Suspicious packets = ${q.suspiciousPacketIds.join(', ')}`,
+        `Attack type = ${q.correctAttackType}`,
+        `Response = ${responseLabel(q.correctResponse)}`,
+      ];
+    case 'topology':
+      return q.nodes.map((node) => `${node.id} → ${node.correctZone}`);
+  }
+}
+
+function asMap(answer: unknown): Record<string, unknown> {
+  return answer && typeof answer === 'object' && !Array.isArray(answer)
+    ? answer as Record<string, unknown>
+    : {};
+}
+
+/** Row strings describing what the candidate submitted for a PBQ. */
+export function getPBQUserRows(q: PBQuestion, answer: unknown): string[] {
+  const dash = '—';
+  switch (q.type) {
+    case 'firewall': {
+      const list = Array.isArray(answer) ? answer as unknown[] : [];
+      return q.rules.map((rule, i) =>
+        `${rule.sourceIP} → ${rule.destIP}:${rule.port}/${rule.protocol} = ${list[i] ?? dash}`);
+    }
+    case 'ordering': {
+      const list = Array.isArray(answer) ? answer as string[] : [];
+      return list.map((label, i) => `${i + 1}. ${label ?? dash}`);
+    }
+    case 'log-analysis': {
+      const a = asMap(answer);
+      return [
+        `Attack type = ${String(a.attackType ?? dash)}`,
+        `Source IP = ${String(a.sourceIP ?? dash)}`,
+        `Response = ${responseLabel(a.response)}`,
+      ];
+    }
+    case 'matching': {
+      const a = asMap(answer);
+      return q.items.map((item) => `${item.left} → ${String(a[item.left] ?? dash)}`);
+    }
+    case 'placement': {
+      const a = asMap(answer);
+      return q.items.map((item) => `${item.label} → ${String(a[item.label] ?? dash)}`);
+    }
+    case 'terminal': {
+      const list = Array.isArray(answer) ? answer as unknown[] : [];
+      return q.tasks.map((task, i) => (task.label ? `${task.label} = ${String(list[i] ?? dash)}` : `Option ${i + 1} = ${String(list[i] ?? dash)}`));
+    }
+    case 'packet-analysis': {
+      const a = asMap(answer);
+      const packets = Array.isArray(a.packetIds) && (a.packetIds as unknown[]).length
+        ? (a.packetIds as unknown[]).join(', ')
+        : dash;
+      return [
+        `Suspicious packets = ${packets}`,
+        `Attack type = ${String(a.attackType ?? dash)}`,
+        `Response = ${responseLabel(a.response)}`,
+      ];
+    }
+    case 'topology': {
+      const a = asMap(answer);
+      return q.nodes.map((node) => `${node.id} → ${String(a[node.id] ?? dash)}`);
+    }
+  }
+}
+
 export interface ScoreResult {
   rawCorrect: number;
   rawTotal: number;

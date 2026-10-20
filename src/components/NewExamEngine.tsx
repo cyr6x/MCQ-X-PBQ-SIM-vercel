@@ -772,7 +772,7 @@ function MCQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: MCQuestio
                     ? 'border-success/60 bg-success/5 text-success'
                     : 'border-destructive/40 bg-muted/40 text-muted-foreground'
                 }`}>
-                  <span className="font-bold uppercase tracking-wider text-[9px] mr-2">
+                  <span className="font-bold uppercase tracking-wider text-[10px] mr-2">
                     {correct ? 'Why correct' : 'Why wrong'}
                   </span>
                   {perOptionNote}

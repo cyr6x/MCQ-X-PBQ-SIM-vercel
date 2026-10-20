@@ -1,6 +1,29 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Canonical button language used across all modules. Pages compose these
+ * classes on raw buttons so hover/disabled behaviour stays identical
+ * everywhere; the classes intentionally carry no transitions.
+ */
+export const primaryButtonClass = cn(
+  'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3',
+  'text-sm font-bold text-primary-foreground hover:opacity-90 active:opacity-80',
+  'disabled:cursor-not-allowed disabled:opacity-40',
+);
+
+export const secondaryButtonClass = cn(
+  'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5',
+  'text-sm font-semibold text-muted-foreground hover:border-primary/40 hover:text-foreground',
+  'disabled:cursor-not-allowed disabled:opacity-40',
+);
+
+export const tertiaryButtonClass = cn(
+  'inline-flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-1.5',
+  'text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground',
+  'disabled:cursor-not-allowed disabled:opacity-40',
+);
+
 export function PageHeader({
   eyebrow,
   title,

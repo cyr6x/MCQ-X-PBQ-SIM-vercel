@@ -43,7 +43,7 @@ export default function AppLayout() {
             <SidebarTrigger className="shrink-0" />
             <div className="h-5 w-px bg-border" />
             <div className="min-w-0">
-              <div className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{meta.kicker}</div>
+              <div className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{meta.kicker}</div>
               <div className="truncate text-sm font-semibold">{meta.title}</div>
             </div>
 

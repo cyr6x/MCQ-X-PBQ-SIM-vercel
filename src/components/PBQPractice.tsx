@@ -218,11 +218,11 @@ export function PBQPractice({ onFinish }: Props) {
             <Panel title="Next PBQ set" eyebrow="Launch">
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-muted/25 p-3">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Set size</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Set size</div>
                   <div className="mt-1 font-mono text-2xl font-semibold">{selectedCount}</div>
                 </div>
                 <div className="rounded-xl bg-muted/25 p-3">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Available</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Available</div>
                   <div className="mt-1 font-mono text-2xl font-semibold">{pool.length}</div>
                 </div>
               </div>
@@ -332,7 +332,7 @@ export function PBQPractice({ onFinish }: Props) {
       <header className="z-40 flex min-h-14 items-center justify-between gap-3 border-b border-border bg-card/95 px-4 backdrop-blur-xl sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div>
-            <div className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">PBQ Lab</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">PBQ Lab</div>
             <div className="font-mono text-sm font-semibold">{idx + 1} / {questions.length}</div>
           </div>
           <div className="hidden h-7 w-px bg-border sm:block" />

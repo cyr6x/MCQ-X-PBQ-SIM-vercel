@@ -229,15 +229,15 @@ export default function ReviewPage() {
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
                         <div className="space-y-4">
                           <section>
-                            <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Question</div>
+                            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Question</div>
                             <p className="text-sm leading-6">{actualQuestion || stat.questionText}</p>
                           </section>
                           <section>
-                            <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-destructive">Latest answer</div>
+                            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-destructive">Latest answer</div>
                             <p className="text-sm leading-6 text-foreground/80">{formatLatestAnswer(stat)}</p>
                           </section>
                           <section>
-                            <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-success">Why</div>
+                            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-success">Why</div>
                             <p className="text-sm leading-6 text-foreground/80">{stat.explanation || 'Explanation will be captured on the next retest.'}</p>
                           </section>
                         </div>

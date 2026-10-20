@@ -3,7 +3,8 @@ import { useState, useMemo } from 'react';
 import type { ScoreResult } from '@/lib/examEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
-import { isMCQCorrect, isPBQCorrect } from '@/lib/examEngine';
+import { isMCQCorrect, isPBQCorrect, getPBQModelRows, getPBQUserRows } from '@/lib/examEngine';
+import { primaryButtonClass, secondaryButtonClass } from '@/components/product/ProductUI';
 
 interface ExamResultsProps {
   score: ScoreResult;
@@ -48,6 +49,8 @@ export function ExamResults({
       userAns: '',
       correctAns: '',
       flagged: flags.has(q.id),
+      modelRows: getPBQModelRows(q),
+      userRows: getPBQUserRows(q, pbqAnswers[q.id]),
     }));
     const mcqItems = mcqs.map((q, i) => {
       const a = mcqAnswers[q.id];
@@ -226,9 +229,9 @@ export function ExamResults({
                     className={`w-full flex items-center gap-2 p-3 text-left transition-colors ${item.correct ? 'bg-success/5 hover:bg-success/10' : 'bg-destructive/5 hover:bg-destructive/10'}`}>
                     {item.correct ? <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" /> : <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />}
                     <span className="text-xs font-mono text-muted-foreground">Q{item.num}</span>
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${item.type === 'pbq' ? 'bg-accent/20 text-accent' : 'bg-primary/10 text-primary'}`}>{item.type === 'pbq' ? 'PBQ' : 'MCQ'}</span>
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${item.type === 'pbq' ? 'bg-accent/20 text-accent' : 'bg-primary/10 text-primary'}`}>{item.type === 'pbq' ? 'PBQ' : 'MCQ'}</span>
                     {item.difficulty !== undefined && (
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${DIFF_COLOR[item.difficulty]}`}>{DIFF_LABEL[item.difficulty]}</span>
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${DIFF_COLOR[item.difficulty]}`}>{DIFF_LABEL[item.difficulty]}</span>
                     )}
                     {item.flagged && <Flag className="h-3 w-3 text-warning flex-shrink-0" />}
                     <span className="flex-1 truncate text-foreground text-xs">{item.title.length > 70 ? item.title.substring(0, 70) + '…' : item.title}</span>
@@ -244,20 +247,40 @@ export function ExamResults({
                       {item.type === 'mcq' && !item.correct && (
                         <p className="text-success"><strong>Correct answer:</strong> {item.correctAns}</p>
                       )}
+                      {item.type === 'pbq' && item.modelRows && item.userRows && (
+                        <div className="grid gap-x-6 gap-y-1 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-1">
+                          <div className="flex flex-wrap gap-x-5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            <span>Model solution vs your answer</span>
+                          </div>
+                          {item.modelRows.map((row, index) => {
+                            const userRow = item.userRows?.[index] ?? '—';
+                            const match = row === userRow;
+                            return (
+                              <div key={row} className="grid gap-0.5 border-b border-border/40 pb-1 last:border-0 sm:grid-cols-[1fr_1fr]">
+                                <span className="text-success/90"><CheckCircle2 className="mr-1 inline h-3 w-3" />{row}</span>
+                                <span className={match ? 'text-success/90' : 'text-destructive'}>
+                                  {match ? <CheckCircle2 className="mr-1 inline h-3 w-3" /> : <XCircle className="mr-1 inline h-3 w-3" />}
+                                  {userRow}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {!item.correct && item.whyWrong && (
                         <div className="flex gap-1.5 bg-destructive/5 rounded-lg p-2.5 text-destructive/90">
                           <XCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <span><strong className="uppercase text-[9px] tracking-wider mr-1">Why incorrect:</strong>{item.whyWrong}</span>
+                          <span><strong className="uppercase text-[10px] tracking-wider mr-1">Why incorrect:</strong>{item.whyWrong}</span>
                         </div>
                       )}
                       <div className="flex gap-1.5 bg-success/5 rounded-lg p-2.5 text-success/90">
                         <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        <span><strong className="uppercase text-[9px] tracking-wider mr-1">Explanation:</strong>{item.explanation}</span>
+                        <span><strong className="uppercase text-[10px] tracking-wider mr-1">Explanation:</strong>{item.explanation}</span>
                       </div>
                       {item.objective && (
                         <div className="flex gap-1.5 bg-muted/40 rounded-lg p-2.5 text-muted-foreground">
                           <BookOpen className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          <span><strong className="uppercase text-[9px] tracking-wider mr-1">Objective:</strong>{item.objective} &middot; {item.domain}</span>
+                          <span><strong className="uppercase text-[10px] tracking-wider mr-1">Objective:</strong>{item.objective} &middot; {item.domain}</span>
                         </div>
                       )}
                     </div>
@@ -271,11 +294,11 @@ export function ExamResults({
         {/* Actions */}
         <div className="flex gap-3 justify-center">
           <button onClick={onRestart}
-            className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 transition-opacity">
+            className={primaryButtonClass}>
             Take Another Exam
           </button>
           <button onClick={onBackToMenu}
-            className="px-6 py-3 rounded-lg border border-border text-foreground font-medium text-sm hover:bg-muted transition-all">
+            className={secondaryButtonClass}>
             Back to Menu
           </button>
         </div>

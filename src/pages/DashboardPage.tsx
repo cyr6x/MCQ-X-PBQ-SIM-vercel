@@ -6,6 +6,7 @@ import { calculateReadiness } from '@/lib/readiness';
 import { subscribeAttempts, subscribeStats } from '@/lib/cloudSync';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
 import { useSettings } from '@/lib/SettingsContext';
+import { PageHeader } from '@/components/product/ProductUI';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,16 +77,17 @@ export default function DashboardPage() {
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       {/* Hero */}
       <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Shield className="w-5 h-5 text-primary" />
-          <h1 className="text-2xl font-bold">Master the exam. Prove your skills.</h1>
-          <span className="ml-auto text-[10px] font-mono text-muted-foreground">
-            {history.length} attempts · synced locally
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Live progress for your SY0-701 prep. Every attempt is saved in this browser and reflected instantly across readiness, review and analytics.
-        </p>
+        <PageHeader
+          eyebrow="Training overview"
+          title="Master the exam. Prove your skills."
+          description="Live progress for your SY0-701 prep. Every attempt is saved in this browser and reflected instantly across readiness, review and analytics."
+          icon={<Shield className="h-4 w-4" />}
+          actions={
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {history.length} attempts · synced locally
+            </span>
+          }
+        />
       </div>
 
       {/* KPI strip */}

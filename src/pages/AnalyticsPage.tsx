@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar, ReferenceLine, Legend,
 } from 'recharts';
-import { ArrowLeft, BarChart3, TrendingUp, TrendingDown, Minus, Brain, Clock, Target } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, Minus, Brain, Clock, Target } from 'lucide-react';
 import { loadHistory, loadQuestionStats } from '@/lib/examHistory';
+import { PageHeader } from '@/components/product/ProductUI';
 import { calculateReadiness } from '@/lib/readiness';
 import { subscribeAttempts, subscribeStats } from '@/lib/cloudSync';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
 
 export default function AnalyticsPage() {
-  const navigate = useNavigate();
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -134,14 +133,13 @@ export default function AnalyticsPage() {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/')} className="p-2 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted">
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" />See what transfers under pressure.</h1>
-          <p className="text-xs text-muted-foreground">Full simulations drive the readiness trend when available. Study and PBQ sessions still feed coverage, repetition and weak-area signals.</p>
-        </div>
+      <div className="mb-6">
+        <PageHeader
+          eyebrow="Performance intelligence"
+          title="See what transfers under pressure."
+          description="Full simulations drive the readiness trend when available. Study and PBQ sessions still feed coverage, repetition and weak-area signals."
+          icon={<BarChart3 className="h-4 w-4" />}
+        />
       </div>
 
       {/* KPI strip */}
