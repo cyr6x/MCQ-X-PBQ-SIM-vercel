@@ -1,5 +1,6 @@
-import { CheckCircle2, XCircle, Trophy, Clock, ChevronDown, ChevronUp, ListFilter, Flag, BookOpen } from 'lucide-react';
+import { CheckCircle2, XCircle, Trophy, Clock, ChevronDown, ChevronUp, ListFilter, Flag, BookOpen, Target } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ScoreResult } from '@/lib/examEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
@@ -30,6 +31,7 @@ export function ExamResults({
   score, pbqs, mcqs, pbqAnswers, mcqAnswers,
   flags = new Set(), questionOrder, onRestart, onBackToMenu,
 }: ExamResultsProps) {
+  const navigate = useNavigate();
   const [expandedQ, setExpandedQ] = useState<string | null>(null);
   const [tab, setTab] = useState<'all' | 'failed' | 'flagged'>('failed');
 
@@ -116,6 +118,24 @@ export function ExamResults({
       .sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0));
   }, [reviewItems]);
 
+  // Weakest-3 objectives from THIS run only: single-exam sample sizes are too
+  // small to rank globally, but they reliably name what just hurt the score.
+  const weakestObjectives = useMemo(() => {
+    const byObjective = new Map<string, { objective: string; domain: string; domainLabel: string; correct: number; total: number }>();
+    reviewItems.forEach(item => {
+      if (!item.objective) return;
+      const entry = byObjective.get(item.objective)
+        ?? { objective: item.objective, domain: item.domainKey, domainLabel: item.domain, correct: 0, total: 0 };
+      entry.correct += item.correct ? 1 : 0;
+      entry.total += 1;
+      byObjective.set(item.objective, entry);
+    });
+    return [...byObjective.values()]
+      .filter(o => o.total >= 2 || o.correct === 0)
+      .sort((a, b) => (a.correct / a.total) - (b.correct / b.total) || b.total - a.total)
+      .slice(0, 3);
+  }, [reviewItems]);
+
 
 
   return (
@@ -185,6 +205,47 @@ export function ExamResults({
           </table>
           <p className="text-[10px] text-muted-foreground mt-3">Gap = (1 &minus; accuracy) &times; domain weight. Higher gap = more scaled-score recovery per hour of study.</p>
         </div>
+
+        {/* Weakest objectives from this run */}
+        {weakestObjectives.length > 0 && (
+          <div className="bg-card border border-border rounded-xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                <Target className="h-3.5 w-3.5" /> Weakest objectives in this exam
+              </h2>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">from this run only</span>
+            </div>
+            <div className="space-y-3">
+              {weakestObjectives.map(o => {
+                const accuracy = Math.round((o.correct / o.total) * 100);
+                return (
+                  <div key={o.objective}>
+                    <div className="flex items-baseline justify-between mb-1 text-xs">
+                      <span className="text-foreground truncate pr-3">{o.objective}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                        {o.correct}/{o.total} &middot; {accuracy}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-12 shrink-0 truncate text-[10px] font-mono uppercase tracking-wider text-muted-foreground" title={o.domainLabel}>
+                        {o.domain}
+                      </div>
+                      <div className="h-2 flex-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${accuracy >= 75 ? 'bg-success' : accuracy >= 50 ? 'bg-warning' : 'bg-destructive'}`}
+                          style={{ width: `${Math.max(2, accuracy)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={() => navigate('/study')} className="mt-4 text-xs font-semibold text-primary hover:underline">
+              Drill these in Study Mode &rarr;
+            </button>
+          </div>
+        )}
 
 
         {/* Question Review */}

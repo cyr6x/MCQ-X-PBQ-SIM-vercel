@@ -234,11 +234,11 @@ export default function ReviewPage() {
                           </section>
                           <section>
                             <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-destructive">Latest answer</div>
-                            <p className="text-sm leading-6 text-foreground/80">{formatLatestAnswer(stat)}</p>
+                            <p className="text-sm leading-6 text-foreground">{formatLatestAnswer(stat)}</p>
                           </section>
                           <section>
                             <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-success">Why</div>
-                            <p className="text-sm leading-6 text-foreground/80">{stat.explanation || 'Explanation will be captured on the next retest.'}</p>
+                            <p className="text-sm leading-6 text-foreground">{stat.explanation || 'Explanation will be captured on the next retest.'}</p>
                           </section>
                         </div>
 

@@ -262,13 +262,13 @@ function LogAnalysisPBQ({ q, ans, onAns, show }: { q: PBQLogAnalysis; ans: any; 
           <div className="w-3 h-3 rounded-full bg-destructive" />
           <div className="w-3 h-3 rounded-full bg-warning" />
           <div className="w-3 h-3 rounded-full bg-success" />
-          <span className="ml-2 text-[10px] font-mono text-white/40 font-bold uppercase tracking-widest">system_audit.log</span>
+          <span className="ml-2 text-[10px] font-mono text-white/60 font-bold uppercase tracking-widest">system_audit.log</span>
         </div>
         <div className="font-mono text-xs space-y-1 max-h-[250px] overflow-auto custom-scrollbar">
           {q.logEntries.map((entry, i) => (
             <div key={i} className="flex gap-4 hover:bg-white/5 py-0.5 group px-2 rounded">
-              <span className="text-white/20 select-none w-6 text-right group-hover:text-white/40">{i+1}</span>
-              <span className={`${entry.type === 'error' ? 'text-destructive' : entry.type === 'warning' ? 'text-warning' : 'text-white/70'}`}>
+              <span className="text-white/50 select-none w-6 text-right group-hover:text-white/70">{i+1}</span>
+              <span className={`${entry.type === 'error' ? 'text-destructive' : entry.type === 'warning' ? 'text-warning' : 'text-white/85'}`}>
                 {entry.line}
               </span>
             </div>
@@ -534,7 +534,7 @@ function TerminalPBQ({ q, ans, onAns, show }: { q: PBQTerminal; ans: number[]; o
           <span className="h-2.5 w-2.5 rounded-full bg-destructive" />
           <span className="h-2.5 w-2.5 rounded-full bg-warning" />
           <span className="h-2.5 w-2.5 rounded-full bg-success" />
-          <span className="ml-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">incident-terminal</span>
+          <span className="ml-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-white/60">incident-terminal</span>
         </div>
         <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap p-5 font-mono text-xs leading-6 text-slate-200">
           {q.transcript.join('\n')}

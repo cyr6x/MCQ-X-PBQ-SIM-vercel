@@ -520,7 +520,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         <div className="flex items-center gap-4">
           <div className="flex flex-col">
             <span className="text-[10px] font-bold text-muted-foreground tracking-widest uppercase">Question</span>
-            <span className="text-xl font-black font-mono leading-none">{idx + 1}<span className="text-muted-foreground/30 mx-1">/</span>{questions.length}</span>
+            <span className="text-xl font-black font-mono leading-none">{idx + 1}<span className="text-muted-foreground/50 mx-1">/</span>{questions.length}</span>
           </div>
           <div className="h-8 w-[1px] bg-border mx-2 hidden sm:block" />
           <div className="hidden sm:flex items-center gap-2">
@@ -962,13 +962,13 @@ function LogAnalysisPBQ({ q, ans, onAns, show }: { q: PBQLogAnalysis; ans: any; 
           <div className="w-3 h-3 rounded-full bg-destructive" />
           <div className="w-3 h-3 rounded-full bg-warning" />
           <div className="w-3 h-3 rounded-full bg-success" />
-          <span className="ml-2 text-[10px] font-mono text-white/40 font-bold uppercase tracking-widest">system_audit.log</span>
+          <span className="ml-2 text-[10px] font-mono text-white/60 font-bold uppercase tracking-widest">system_audit.log</span>
         </div>
         <div className="font-mono text-xs space-y-1 max-h-[250px] overflow-auto custom-scrollbar">
           {q.logEntries.map((entry, i) => (
             <div key={i} className="flex gap-4 hover:bg-white/5 py-0.5 group px-2 rounded">
-              <span className="text-white/20 select-none w-6 text-right group-hover:text-white/40">{i+1}</span>
-              <span className={`${entry.type === 'error' ? 'text-destructive' : entry.type === 'warning' ? 'text-warning' : 'text-white/70'}`}>
+              <span className="text-white/50 select-none w-6 text-right group-hover:text-white/70">{i+1}</span>
+              <span className={`${entry.type === 'error' ? 'text-destructive' : entry.type === 'warning' ? 'text-warning' : 'text-white/85'}`}>
                 {entry.line}
               </span>
             </div>

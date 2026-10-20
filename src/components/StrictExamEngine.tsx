@@ -572,7 +572,7 @@ export function StrictExamEngine({
                     onClick={() => goToQuestion(index)}
                     className="flex min-h-14 items-center gap-3 bg-card px-4 py-3 text-left hover:bg-muted/50"
                   >
-                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/40'}`} />
+                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/60'}`} />
                     <span className="font-mono text-sm font-semibold">Question {index + 1}</span>
                     {!answered && <span className="ml-auto text-[11px] font-semibold text-destructive">Incomplete</span>}
                   </button>

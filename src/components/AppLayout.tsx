@@ -1,7 +1,9 @@
+import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { RouteSkeleton } from '@/components/RouteSkeleton';
 import { CalendarDays, Settings2 } from 'lucide-react';
 import { useSettings } from '@/lib/SettingsContext';
 
@@ -70,7 +72,9 @@ export default function AppLayout() {
           </header>
           <main className="relative z-10 min-w-0 flex-1">
             <AppErrorBoundary key={location.pathname}>
-              <Outlet />
+              <Suspense fallback={<RouteSkeleton />}>
+                <Outlet />
+              </Suspense>
             </AppErrorBoundary>
           </main>
         </div>
