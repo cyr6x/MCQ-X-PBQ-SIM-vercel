@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   ChevronLeft,
@@ -599,26 +600,33 @@ export function StrictExamEngine({
           </section>
         </div>
 
-        <button
-          onClick={() => goToQuestion(idx - 1)}
-          disabled={idx === 0}
-          className="absolute left-0 top-1/2 z-50 flex min-h-[64px] -translate-y-1/2 items-center rounded-r-xl border-y border-r border-primary/40 bg-primary/95 px-4 py-4 text-sm font-bold text-primary-foreground shadow-lg transition-colors hover:bg-primary disabled:opacity-30 disabled:hover:bg-primary/95"
-          aria-label="Previous question"
-          title="Previous question"
-        >
-          <ChevronLeft className="h-6 w-6" />
-          <span className="ml-1 hidden sm:inline">Prev</span>
-        </button>
+        {createPortal(
+          <div
+            className={`fixed inset-0 z-[300] ${showEndConfirm || showExitConfirm ? 'hidden' : 'pointer-events-none'}`}
+          >
+            <button
+              type="button"
+              onClick={() => goToQuestion(idx - 1)}
+              disabled={idx === 0}
+              className="pointer-events-auto absolute left-0 top-1/2 flex min-h-[72px] min-w-[56px] -translate-y-1/2 items-center justify-center rounded-r-xl border-y border-r border-primary/40 bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-xl"
+              aria-label="Previous question"
+              title="Previous question"
+            >
+              <ChevronLeft className="h-7 w-7" />
+            </button>
 
-        <button
-          onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
-          className="absolute right-0 top-1/2 z-50 flex min-h-[64px] -translate-y-1/2 items-center rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-lg transition-colors hover:opacity-90"
-          aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
-          title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
-        >
-          <span className="mr-1 hidden sm:inline">{idx < questions.length - 1 ? 'Next' : 'Review'}</span>
-          <ChevronRight className="h-6 w-6" />
-        </button>
+            <button
+              type="button"
+              onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
+              className="pointer-events-auto absolute right-0 top-1/2 flex min-h-[72px] min-w-[56px] -translate-y-1/2 items-center justify-center rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-xl"
+              aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
+              title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
+            >
+              <ChevronRight className="h-7 w-7" />
+            </button>
+          </div>,
+          document.body,
+        )}
       </main>
       {showExitConfirm && (
         <ExitExamConfirm
