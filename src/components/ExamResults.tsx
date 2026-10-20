@@ -113,7 +113,7 @@ export function ExamResults({
       .sort((a, b) => (b.gap ?? 0) - (a.gap ?? 0));
   }, [reviewItems]);
 
-﻿
+
 
   return (
     <div className="min-h-screen">

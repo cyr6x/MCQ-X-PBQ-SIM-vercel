@@ -24,11 +24,22 @@ function formatClock(seconds: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+const LAST_EXAM_KEY = 'secplus-last-exam';
+
+function loadLastExamNumber(): ExamNumber {
+  try {
+    const value = Number(window.localStorage.getItem(LAST_EXAM_KEY));
+    return EXAM_SETS.some((set) => set.number === value) ? (value as ExamNumber) : 1;
+  } catch {
+    return 1;
+  }
+}
+
 export default function ExamPage() {
   const navigate = useNavigate();
   const { settings } = useSettings();
   const progress = useProgressSnapshot(settings);
-  const [selected, setSelected] = useState<ExamNumber>(1);
+  const [selected, setSelected] = useState<ExamNumber>(() => loadLastExamNumber());
   const [examData, setExamData] = useState<ReturnType<typeof buildExam> | null>(null);
   const [resume, setResume] = useState<StrictExamSnapshot | null>(() => loadExamSnapshot());
   const [activeResume, setActiveResume] = useState<StrictExamSnapshot | null>(null);
@@ -138,7 +149,14 @@ export default function ExamPage() {
             {EXAM_SETS.map((set) => (
               <button
                 key={set.number}
-                onClick={() => setSelected(set.number)}
+                onClick={() => {
+                  setSelected(set.number);
+                  try {
+                    window.localStorage.setItem(LAST_EXAM_KEY, String(set.number));
+                  } catch {
+                    // Persistence is a convenience; exam selection still works without it.
+                  }
+                }}
                 className={`rounded-xl border px-3 py-4 text-center transition-colors ${
                   selected === set.number
                     ? 'border-primary bg-primary text-primary-foreground'

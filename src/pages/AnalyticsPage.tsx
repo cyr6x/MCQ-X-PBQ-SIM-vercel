@@ -100,6 +100,38 @@ export default function AnalyticsPage() {
     ? <TrendingDown className="h-4 w-4 text-destructive" />
     : <Minus className="h-4 w-4 text-muted-foreground" />;
 
+  const download = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCsv = () => {
+    const rows = [['date', 'mode', 'totalQuestions', 'correct', 'percentage', 'passed']];
+    history
+      .slice()
+      .sort((a, b) => a.endTime - b.endTime)
+      .forEach((a) => {
+        rows.push([
+          new Date(a.endTime).toISOString(),
+          a.mode,
+          String(a.totalQuestions),
+          String(a.correctAnswers),
+          String(a.percentage),
+          String(a.passed),
+        ]);
+      });
+    download(rows.map((r) => r.join(',')).join('\n'), 'secplus-performance.csv', 'text/csv');
+  };
+
+  const exportJson = () => {
+    download(JSON.stringify(history, null, 2), 'secplus-performance.json', 'application/json');
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-6xl">
       <div className="flex items-center gap-3 mb-6">
@@ -186,7 +218,7 @@ export default function AnalyticsPage() {
       </div>
 
       {readiness && readiness.recommendations.length > 0 && (
-        <div className="bg-card border border-border rounded-xl p-5">
+        <div className="bg-card border border-border rounded-xl p-5 mb-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">Recommendations</h2>
           <ul className="space-y-2">
             {readiness.recommendations.map((r, i) => (
@@ -195,6 +227,63 @@ export default function AnalyticsPage() {
           </ul>
         </div>
       )}
+
+      {/* Attempt history */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Attempt history</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={exportCsv}
+              disabled={history.length === 0}
+              className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={exportJson}
+              disabled={history.length === 0}
+              className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+            >
+              Export JSON
+            </button>
+          </div>
+        </div>
+        {history.length === 0 ? (
+          <Empty body="Finished sessions appear here with a one-click performance export." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Date</th>
+                  <th className="py-2 pr-4 font-medium">Mode</th>
+                  <th className="py-2 pr-4 font-medium">Score</th>
+                  <th className="py-2 font-medium">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.slice(0, 10).map((a) => (
+                  <tr key={a.id} className="border-b border-border/50">
+                    <td className="py-2 pr-4 text-muted-foreground">
+                      {new Date(a.endTime).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </td>
+                    <td className="py-2 pr-4 capitalize">{a.mode}</td>
+                    <td className="py-2 pr-4 font-mono">{a.percentage}%</td>
+                    <td className="py-2">
+                      {a.mode === 'exam'
+                        ? <span className={`text-xs font-bold ${a.passed ? 'text-success' : 'text-destructive'}`}>{a.passed ? 'Pass' : 'Below 750'}</span>
+                        : <span className="text-xs text-muted-foreground">{a.correctAnswers}/{a.totalQuestions}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Attempt history ends */}
     </div>
   );
 }

@@ -161,6 +161,13 @@ export function StrictExamEngine({
     return () => window.clearInterval(timer);
   }, [buildSnapshot]);
 
+  // Persist on every navigation/answer so even a crash loses at most the
+  // current click, not the last 5 seconds of progress.
+  useEffect(() => {
+    if (phase === 'submitted') return;
+    saveExamSnapshot(buildSnapshot());
+  }, [idx, mcqAnswers, pbqAnswers, flags, phase, buildSnapshot]);
+
   const current = questions[idx];
   const currentId = current?.data.id;
 
@@ -403,6 +410,94 @@ export function StrictExamEngine({
     });
   };
 
+  const openReview = () => {
+    if (isPaused) return;
+    recordCurrentItemTime();
+    setReviewFilter('all');
+    setPhase('review');
+  };
+
+  const handleMcqAnswer = (
+    dataId: string,
+    type: 'single' | 'select-two',
+    answer: number | number[],
+  ) => {
+    const complete = type === 'single' ? true : Array.isArray(answer) && answer.length === 2;
+    let changed = true;
+
+    setMcqAnswers(previous => {
+      const before = previous[dataId];
+      const same = before === answer
+        || (Array.isArray(before) && Array.isArray(answer)
+          && before.length === answer.length
+          && before.every(value => answer.includes(value)));
+      if (same) {
+        changed = false;
+        return previous;
+      }
+      return { ...previous, [dataId]: answer };
+    });
+
+    if (complete && changed) goToQuestion(idx + 1);
+  };
+
+  // Pearson-style keyboard control: 1-9 / A-D answer, arrows or [ ] navigate,
+  // F flags the current item. Disabled while paused, on PBQs and while typing.
+  useEffect(() => {
+    if (phase !== 'item' || isPaused || !current || current.kind !== 'mcq') return;
+
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target
+        && (target.tagName === 'INPUT'
+          || target.tagName === 'SELECT'
+          || target.tagName === 'TEXTAREA'
+          || target.isContentEditable)
+      ) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+
+      if (event.key === 'ArrowLeft' || key === '[') {
+        event.preventDefault();
+        goToQuestion(idx - 1);
+        return;
+      }
+      if (event.key === 'ArrowRight' || key === ']') {
+        event.preventDefault();
+        if (idx < questions.length - 1) goToQuestion(idx + 1);
+        else openReview();
+        return;
+      }
+      if (key === 'f') {
+        event.preventDefault();
+        toggleFlag();
+        return;
+      }
+
+      const q = current.data;
+      const numberIndex = event.key >= '1' && event.key <= '9' ? Number(event.key) - 1 : -1;
+      const letterIndex = key.length === 1 ? key.charCodeAt(0) - 97 : -1;
+      const optionIndex = numberIndex >= 0 ? numberIndex : letterIndex;
+      if (optionIndex >= 0 && optionIndex < q.options.length) {
+        event.preventDefault();
+        if (q.type === 'single') {
+          handleMcqAnswer(q.id, 'single', optionIndex);
+        } else {
+          const selected = Array.isArray(mcqAnswers[q.id]) ? mcqAnswers[q.id] as number[] : [];
+          const next = selected.includes(optionIndex)
+            ? selected.filter(value => value !== optionIndex)
+            : selected.length < 2 ? [...selected, optionIndex] : selected;
+          handleMcqAnswer(q.id, 'select-two', next);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   if (phase === 'submitted' && scoreResult) {
     return (
       <div className="min-h-screen bg-background text-foreground">
@@ -531,13 +626,6 @@ export function StrictExamEngine({
 
   if (!current) return null;
 
-  const openReview = () => {
-    if (isPaused) return;
-    recordCurrentItemTime();
-    setReviewFilter('all');
-    setPhase('review');
-  };
-
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {topBar}
@@ -556,6 +644,9 @@ export function StrictExamEngine({
             <div>
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Question</div>
               <div className="font-mono text-base font-semibold">{idx + 1} of {questions.length}</div>
+            </div>
+            <div className="hidden text-[10px] text-muted-foreground lg:block">
+              Keys: 1-9 / A-D answer · ← → navigate · F flag
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -594,26 +685,7 @@ export function StrictExamEngine({
               <StrictMCQ
                 q={current.data}
                 answer={mcqAnswers[current.data.id]}
-                onAnswer={answer => {
-                  const dataId = current.data.id;
-                  const complete = current.data.type === 'single' ? true : Array.isArray(answer) && answer.length === 2;
-                  let changed = true;
-
-                  setMcqAnswers(previous => {
-                    const before = previous[dataId];
-                    const same = before === answer
-                      || (Array.isArray(before) && Array.isArray(answer)
-                        && before.length === answer.length
-                        && before.every(value => answer.includes(value)));
-                    if (same) {
-                      changed = false;
-                      return previous;
-                    }
-                    return { ...previous, [dataId]: answer };
-                  });
-
-                  if (complete && changed) goToQuestion(idx + 1);
-                }}
+                onAnswer={answer => handleMcqAnswer(current.data.id, current.data.type, answer)}
               />
             )}
           </section>

@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { CalendarDays, Settings2 } from 'lucide-react';
 import { useSettings } from '@/lib/SettingsContext';
 
@@ -68,7 +69,9 @@ export default function AppLayout() {
             </div>
           </header>
           <main className="relative z-10 min-w-0 flex-1">
-            <Outlet />
+            <AppErrorBoundary key={location.pathname}>
+              <Outlet />
+            </AppErrorBoundary>
           </main>
         </div>
       </div>

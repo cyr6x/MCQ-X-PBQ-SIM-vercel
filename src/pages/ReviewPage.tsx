@@ -166,8 +166,24 @@ export default function ReviewPage() {
               <Target className="mb-3 h-8 w-8 text-success" />
               <h2 className="font-semibold">Nothing to repair in this view.</h2>
               <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                Complete another training session, or switch to Ever Missed to inspect older patterns.
+                {missed.length === 0
+                  ? 'Clean sheet so far. Keep the streak honest — run a full exam to stress the weaker domains.'
+                  : 'Complete another training session, or switch to Ever Missed to inspect older patterns.'}
               </p>
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => { window.location.hash = '#/exam'; }}
+                  className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                >
+                  Run a full exam
+                </button>
+                <button
+                  onClick={() => { window.location.hash = '#/study'; }}
+                  className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                >
+                  Open study drills
+                </button>
+              </div>
             </div>
           </Panel>
         ) : (

@@ -50,13 +50,28 @@ describe('full training journey whitebox', () => {
         expect(q.answer).toBeGreaterThanOrEqual(0);
         expect(q.answer).toBeLessThan(q.options.length);
       } else {
-        expect(q.answer).toHaveLength(2);
-        expect(new Set(q.answer).size).toBe(2);
-        q.answer.forEach((index) => {
+        const keyed = q.answer as number[];
+        expect(keyed).toHaveLength(2);
+        expect(new Set(keyed).size).toBe(2);
+        keyed.forEach((index) => {
           expect(index).toBeGreaterThanOrEqual(0);
           expect(index).toBeLessThan(q.options.length);
         });
       }
+
+      if (q.whyWrong) {
+        Object.keys(q.whyWrong).forEach((key) => {
+          const index = Number(key);
+          expect(index).toBeGreaterThanOrEqual(0);
+          expect(index).toBeLessThan(q.options.length);
+          expect(index).not.toBe(q.answer);
+          expect(q.whyWrong![index].length).toBeGreaterThan(10);
+        });
+      }
+
+      expect(q.explanation).toBeTruthy();
+      expect(q.options.length).toBeGreaterThanOrEqual(4);
+      expect(q.question.length).toBeGreaterThan(24);
     });
 
     pbqBank.forEach((q) => {

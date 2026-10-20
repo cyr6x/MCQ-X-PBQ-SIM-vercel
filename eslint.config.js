@@ -21,6 +21,10 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // Legacy PBQ answer plumbing uses `any` in ~30 call sites; tightening
+      // those types is deliberate follow-up work, tracked separately. The
+      // remaining recommended rules stay at error severity.
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 );

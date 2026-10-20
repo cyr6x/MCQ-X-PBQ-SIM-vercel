@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, Target, BookOpen, Layers, History, ChevronRight, TrendingUp, TrendingDown, Minus, Zap, AlertTriangle, Flame } from 'lucide-react';
 import { loadHistory, loadQuestionStats, getStudyStreak, getActivityHeatmap } from '@/lib/examHistory';
 import { calculateReadiness } from '@/lib/readiness';
-import { fetchAttempts, subscribeAttempts, subscribeStats } from '@/lib/cloudSync';
+import { subscribeAttempts, subscribeStats } from '@/lib/cloudSync';
 import { DOMAIN_LABELS, DOMAIN_WEIGHTS, type Domain } from '@/data/questions';
 import { useSettings } from '@/lib/SettingsContext';
 
@@ -13,19 +13,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const [tick, setTick] = useState(0); // re-render on cloud changes
-  const [cloudCount, setCloudCount] = useState<number | null>(null);
-  const [cloudOk, setCloudOk] = useState<boolean | null>(null);
+  const [tick, setTick] = useState(0); // re-render when attempt data changes
 
-  // Initial pull + realtime subscription
   useEffect(() => {
-    let mounted = true;
-    fetchAttempts()
-      .then((rows) => { if (mounted) { setCloudCount(rows.length); setCloudOk(true); } })
-      .catch(() => mounted && setCloudOk(false));
     const offA = subscribeAttempts(() => setTick((t) => t + 1));
     const offS = subscribeStats(() => setTick((t) => t + 1));
-    return () => { mounted = false; offA(); offS(); };
+    return () => { offA(); offS(); };
   }, []);
 
   const history = useMemo(() => loadHistory(), [tick]);
@@ -86,14 +79,12 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 mb-2">
           <Shield className="w-5 h-5 text-primary" />
           <h1 className="text-2xl font-bold">Master the exam. Prove your skills.</h1>
-          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded border border-border bg-card">
-            <span className={`w-1.5 h-1.5 rounded-full ${cloudOk === true ? 'bg-success animate-pulse' : cloudOk === false ? 'bg-destructive' : 'bg-muted-foreground'}`} />
-            {cloudOk === true ? 'CLOUD SYNCED' : cloudOk === false ? 'OFFLINE' : 'CONNECTING…'}
-            {cloudCount !== null && <span className="text-muted-foreground">· {cloudCount} cloud attempts</span>}
+          <span className="ml-auto text-[10px] font-mono text-muted-foreground">
+            {history.length} attempts · synced locally
           </span>
         </div>
         <p className="text-sm text-muted-foreground">
-          Live progress for your SY0-701 prep. Stats update in realtime as you answer questions on any device using this browser identity.
+          Live progress for your SY0-701 prep. Every attempt is saved in this browser and reflected instantly across readiness, review and analytics.
         </p>
       </div>
 

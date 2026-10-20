@@ -25,6 +25,8 @@ interface StudySession {
   pbqs: PBQuestion[];
 }
 
+const LAST_STUDY_DOMAIN_KEY = 'secplus-last-study-domain';
+
 const MODE_META: Record<Mode, { title: string; description: string; icon: React.ReactNode }> = {
   tutor: { title: 'Tutor Mode', description: 'Untimed bank with instant feedback and explanations.', icon: <BookOpen className="h-5 w-5" /> },
   sprint: { title: 'Sprint', description: 'Fast repetition using your configured sprint size.', icon: <Zap className="h-5 w-5" /> },
@@ -41,15 +43,30 @@ export default function StudyPage() {
   const [searchParams] = useSearchParams();
   const requestedDomain = searchParams.get('domain');
   const requestedMode = searchParams.get('mode') as Mode | null;
-  const [selectedDomain, setSelectedDomain] = useState<Domain | ''>(
-    requestedDomain && requestedDomain in DOMAIN_LABELS ? requestedDomain as Domain : '',
-  );
+  const [selectedDomain, setSelectedDomain] = useState<Domain | ''>(() => {
+    if (requestedDomain && requestedDomain in DOMAIN_LABELS) return requestedDomain as Domain;
+    try {
+      const last = window.localStorage.getItem(LAST_STUDY_DOMAIN_KEY) ?? '';
+      return last && last in DOMAIN_LABELS ? (last as Domain) : '';
+    } catch {
+      return '';
+    }
+  });
   const [session, setSession] = useState<StudySession | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (requestedDomain && requestedDomain in DOMAIN_LABELS) setSelectedDomain(requestedDomain as Domain);
   }, [requestedDomain]);
+
+  useEffect(() => {
+    if (!selectedDomain) return;
+    try {
+      window.localStorage.setItem(LAST_STUDY_DOMAIN_KEY, selectedDomain);
+    } catch {
+      // Persistence is a convenience; study selection still works without it.
+    }
+  }, [selectedDomain]);
 
   const allMcqs = useMemo(() => [...mcqSingle, ...mcqSelectTwo], []);
   const mcqById = useMemo(() => new Map(allMcqs.map((question) => [question.id, question])), [allMcqs]);
