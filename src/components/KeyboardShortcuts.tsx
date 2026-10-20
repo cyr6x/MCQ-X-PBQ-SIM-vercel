@@ -58,7 +58,7 @@ export function KeyboardShortcuts() {
             ['g d', 'Dashboard'],
             ['g s', 'Study Mode'],
             ['g p', 'PBQ Lab'],
-            ['g e', 'Exam Simulation'],
+            ['g e', 'Exams'],
             ['g r', 'Review'],
             ['g a', 'Analytics'],
             ['g ,', 'Settings'],

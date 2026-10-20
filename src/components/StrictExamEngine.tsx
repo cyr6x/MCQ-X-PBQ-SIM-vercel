@@ -5,12 +5,15 @@ import {
   ChevronRight,
   Clock,
   Flag,
+  Home,
   ListChecks,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   ShieldCheck,
 } from 'lucide-react';
-import type { MCQuestion, PBQuestion } from '@/data/questions';
+import type { ExamNumber, MCQuestion, PBQuestion } from '@/data/questions';
 import { calculateScore, isMCQCorrect, isPBQCorrect, type ScoreResult } from '@/lib/examEngine';
 import { saveAttempt, type QuestionAttempt } from '@/lib/examHistory';
 import { DOMAIN_LABELS } from '@/data/questions';
@@ -22,12 +25,55 @@ import { useSettings } from '@/lib/SettingsContext';
 
 type ReviewFilter = 'all' | 'incomplete' | 'flagged';
 
+const RESUME_KEY = 'secplus-exam-resume-v1';
+
+export interface StrictExamSnapshot {
+  examNumber: ExamNumber;
+  savedAt: number;
+  remaining: number;
+  idx: number;
+  phase: 'item' | 'review';
+  mcqAnswers: Record<string, number | number[]>;
+  pbqAnswers: Record<string, unknown>;
+  flags: string[];
+  timeByQuestion: Record<string, number>;
+}
+
+export function loadExamSnapshot(): StrictExamSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(RESUME_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StrictExamSnapshot;
+    return parsed && typeof parsed.examNumber === 'number' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearExamSnapshot() {
+  try {
+    window.localStorage.removeItem(RESUME_KEY);
+  } catch {
+    // Storage may be unavailable; a resume-less session is always safe.
+  }
+}
+
+function saveExamSnapshot(snapshot: StrictExamSnapshot) {
+  try {
+    window.localStorage.setItem(RESUME_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Storage may be unavailable; resuming is a convenience, not a dependency.
+  }
+}
+
 interface StrictExamEngineProps {
   pbqs: PBQuestion[];
   mcqs: MCQuestion[];
   durationMinutes: number;
-  examNumber?: 1 | 2 | 3 | 4 | 5;
+  examNumber?: ExamNumber;
+  resumeState?: StrictExamSnapshot | null;
   onFinish: () => void;
+  onExit?: () => void;
 }
 
 function pbqAttempted(answer: unknown): boolean {
@@ -47,7 +93,9 @@ export function StrictExamEngine({
   mcqs,
   durationMinutes,
   examNumber = 1,
+  resumeState = null,
   onFinish,
+  onExit,
 }: StrictExamEngineProps) {
   const { settings } = useSettings();
   const questions = useMemo(
@@ -55,25 +103,62 @@ export function StrictExamEngine({
     [pbqs, mcqs, examNumber],
   );
 
-  const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<'item' | 'review' | 'submitted'>('item');
+  const [idx, setIdx] = useState(() => Math.min(resumeState?.idx ?? 0, questions.length - 1));
+  const [phase, setPhase] = useState<'item' | 'review' | 'submitted'>(resumeState?.phase ?? 'item');
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
-  const [pbqAnswers, setPbqAnswers] = useState<Record<string, unknown>>({});
-  const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>({});
-  const [flags, setFlags] = useState<Set<string>>(new Set());
-  const [remaining, setRemaining] = useState(durationMinutes * 60);
+  const [pbqAnswers, setPbqAnswers] = useState<Record<string, unknown>>(resumeState?.pbqAnswers ?? {});
+  const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>(resumeState?.mcqAnswers ?? {});
+  const [flags, setFlags] = useState<Set<string>>(() => new Set(resumeState?.flags ?? []));
+  const [remaining, setRemaining] = useState(() => resumeState?.remaining ?? durationMinutes * 60);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [focusNotice, setFocusNotice] = useState(false);
   const [focusViolations, setFocusViolations] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement));
 
   const startTimeRef = useRef(Date.now());
-  const timeByQuestionRef = useRef<Record<string, number>>({});
+  const timeByQuestionRef = useRef({ ...(resumeState?.timeByQuestion ?? {}) });
   const activeItemRef = useRef<{ id: string; startedAt: number } | null>(null);
   const submittedRef = useRef(false);
-  const totalPausedMsRef = useRef(0);
+  const totalPausedMsRef = useRef(
+    Math.max(0, durationMinutes * 60 - (resumeState?.remaining ?? durationMinutes * 60)),
+  );
   const pauseStartedAtRef = useRef<number | null>(null);
+
+  const liveStateRef = useRef({
+    idx,
+    phase,
+    remaining,
+    mcqAnswers,
+    pbqAnswers,
+    flags,
+  });
+  liveStateRef.current = { idx, phase, remaining, mcqAnswers, pbqAnswers, flags };
+
+  const buildSnapshot = useCallback((): StrictExamSnapshot => {
+    const live = liveStateRef.current;
+    return {
+      examNumber,
+      savedAt: Date.now(),
+      remaining: live.remaining,
+      idx: live.idx,
+      phase: live.phase === 'submitted' ? 'item' : live.phase,
+      mcqAnswers: live.mcqAnswers,
+      pbqAnswers: live.pbqAnswers,
+      flags: Array.from(live.flags),
+      timeByQuestion: { ...timeByQuestionRef.current },
+    };
+  }, [examNumber]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (liveStateRef.current.phase === 'submitted') return;
+      saveExamSnapshot(buildSnapshot());
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [buildSnapshot]);
 
   const current = questions[idx];
   const currentId = current?.data.id;
@@ -106,7 +191,7 @@ export function StrictExamEngine({
   }, [currentId, phase, isPaused, recordCurrentItemTime]);
 
   const togglePause = useCallback(() => {
-    if (!settings.exam_pause_enabled || phase === 'submitted') return;
+    if (phase === 'submitted') return;
 
     if (isPaused) {
       const started = pauseStartedAtRef.current;
@@ -119,7 +204,7 @@ export function StrictExamEngine({
     recordCurrentItemTime();
     pauseStartedAtRef.current = Date.now();
     setIsPaused(true);
-  }, [isPaused, phase, recordCurrentItemTime, settings.exam_pause_enabled]);
+  }, [isPaused, phase, recordCurrentItemTime]);
 
   const pausedMilliseconds = useCallback(() => {
     const activePause = isPaused && pauseStartedAtRef.current !== null
@@ -128,10 +213,43 @@ export function StrictExamEngine({
     return totalPausedMsRef.current + activePause;
   }, [isPaused]);
 
+  const requestExit = useCallback(() => {
+    if (phase === 'submitted') return;
+    setShowEndConfirm(false);
+    setShowExitConfirm(true);
+  }, [phase]);
+
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined);
+    } else {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
+  }, []);
+
+  const confirmExit = useCallback(() => {
+    setShowExitConfirm(false);
+    if (isPaused) {
+      pauseStartedAtRef.current = null;
+      setIsPaused(false);
+    }
+    recordCurrentItemTime();
+    saveExamSnapshot(buildSnapshot());
+    delete document.body.dataset.examActive;
+    onExit?.();
+  }, [buildSnapshot, isPaused, onExit, recordCurrentItemTime]);
+
   const finishExam = useCallback(() => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     recordCurrentItemTime();
+    clearExamSnapshot();
 
     const startTime = startTimeRef.current;
     const result = calculateScore(
@@ -221,6 +339,17 @@ export function StrictExamEngine({
   }, [durationMinutes, finishExam, isPaused, phase]);
 
   useEffect(() => {
+    if (phase === 'submitted') {
+      delete document.body.dataset.examActive;
+      return;
+    }
+    document.body.dataset.examActive = 'true';
+    return () => {
+      delete document.body.dataset.examActive;
+    };
+  }, [phase]);
+
+  useEffect(() => {
     if (phase === 'submitted') return;
 
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -299,9 +428,11 @@ export function StrictExamEngine({
       timerDisplay={timerDisplay}
       examNumber={examNumber}
       timerTone={timerTone}
-      pauseEnabled={settings.exam_pause_enabled}
       isPaused={isPaused}
+      isFullscreen={isFullscreen}
       onPause={togglePause}
+      onExit={requestExit}
+      onToggleFullscreen={toggleFullscreen}
     />
   );
 
@@ -448,7 +579,7 @@ export function StrictExamEngine({
             </div>
           </div>
 
-          <section className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+          <section className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-2xl border border-border bg-card p-4 pb-12 shadow-sm sm:p-6">
             {current.kind === 'pbq' ? (
               <PBQRenderer
                 q={current.data}
@@ -466,52 +597,68 @@ export function StrictExamEngine({
               />
             )}
           </section>
-
-          <footer className="mt-3 flex shrink-0 items-center justify-between gap-3 border-t border-border pt-3">
-            <button
-              onClick={() => goToQuestion(idx - 1)}
-              disabled={idx === 0}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-semibold disabled:opacity-30 hover:bg-muted active:bg-muted/80 touch-manipulation min-h-[44px]"
-            >
-              <ChevronLeft className="h-4 w-4" /> <span className="hidden sm:inline">Previous</span><span className="sm:hidden">Prev</span>
-            </button>
-
-            <div className="hidden text-xs text-center text-muted-foreground sm:block flex-1 px-2">
-              {focusViolations > 0
-                ? `Focus changes recorded: ${focusViolations}`
-                : settings.exam_pause_enabled
-                  ? 'Pause is available for real-world interruptions'
-                  : 'Exam timer runs continuously'}
-            </div>
-
-            {idx < questions.length - 1 ? (
-              <button
-                onClick={() => goToQuestion(idx + 1)}
-                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 active:opacity-80 touch-manipulation md:hidden min-h-[44px]"
-              >
-                <span className="hidden sm:inline">Next</span><span className="sm:hidden">Next</span> <ChevronRight className="h-4 w-4" />
-              </button>
-            ) : (
-              <button
-                onClick={openReview}
-                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 active:opacity-80 touch-manipulation md:hidden min-h-[44px]"
-              >
-                Review Exam <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-          </footer>
         </div>
 
         <button
+          onClick={() => goToQuestion(idx - 1)}
+          disabled={idx === 0}
+          className="absolute left-0 top-1/2 z-50 flex min-h-[64px] -translate-y-1/2 items-center rounded-r-xl border-y border-r border-primary/40 bg-primary/95 px-4 py-4 text-sm font-bold text-primary-foreground shadow-lg transition-colors hover:bg-primary disabled:opacity-30 disabled:hover:bg-primary/95"
+          aria-label="Previous question"
+          title="Previous question"
+        >
+          <ChevronLeft className="h-6 w-6" />
+          <span className="ml-1 hidden sm:inline">Prev</span>
+        </button>
+
+        <button
           onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
-          className="fixed right-0 top-1/2 z-50 hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
+          className="absolute right-0 top-1/2 z-50 flex min-h-[64px] -translate-y-1/2 items-center rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-lg transition-colors hover:opacity-90"
           aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
           title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
         >
-          <span>{idx < questions.length - 1 ? 'Next' : 'Review'}</span>
-          <ChevronRight className="h-5 w-5" />
+          <span className="mr-1 hidden sm:inline">{idx < questions.length - 1 ? 'Next' : 'Review'}</span>
+          <ChevronRight className="h-6 w-6" />
         </button>
       </main>
+      {showExitConfirm && (
+        <ExitExamConfirm
+          onCancel={() => setShowExitConfirm(false)}
+          onConfirm={confirmExit}
+        />
+      )}
+    </div>
+  );
+}
+
+function ExitExamConfirm({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-7 shadow-2xl">
+        <h2 className="text-lg font-bold">Leave the exam?</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          The timer freezes the moment you leave. Your answers are saved, and you can resume from the exam page with the remaining time intact.
+        </p>
+        <div className="mt-6 flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-lg border border-border bg-card px-4 py-3 text-sm font-semibold hover:bg-muted"
+          >
+            Stay
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+          >
+            Leave &amp; save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -520,16 +667,20 @@ function ExamTopBar({
   timerDisplay,
   examNumber,
   timerTone,
-  pauseEnabled,
   isPaused,
+  isFullscreen,
   onPause,
+  onExit,
+  onToggleFullscreen,
 }: {
   timerDisplay: string;
   examNumber: number;
   timerTone: 'normal' | 'warning' | 'destructive';
-  pauseEnabled: boolean;
   isPaused: boolean;
+  isFullscreen: boolean;
   onPause: () => void;
+  onExit: () => void;
+  onToggleFullscreen: () => void;
 }) {
   const timerClass =
     timerTone === 'destructive'
@@ -545,20 +696,34 @@ function ExamTopBar({
           <ShieldCheck className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold">Security+ SY0-701 Simulation</span>
           <span className="hidden rounded-md border border-border bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground sm:inline">
-            Form {examNumber}
+            Exam {examNumber}
           </span>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {pauseEnabled && (
-            <button
-              onClick={onPause}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-              <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
-            </button>
-          )}
+          <button
+            onClick={onPause}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+          </button>
+          <button
+            onClick={onToggleFullscreen}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
+          </button>
+          <button
+            onClick={onExit}
+            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Leave exam"
+          >
+            <Home className="h-4 w-4" />
+            <span className="hidden sm:inline">Home</span>
+          </button>
           <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
             <Clock className="h-4 w-4" />
             <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>

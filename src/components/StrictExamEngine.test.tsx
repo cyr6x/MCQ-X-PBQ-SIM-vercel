@@ -41,7 +41,7 @@ const mcq: MCQuestion = {
 };
 
 describe('StrictExamEngine training controls', () => {
-  it('keeps the next-question action available at the viewport edge', () => {
+  it('keeps the next-question action statically on the right edge', () => {
     render(
       <StrictExamEngine
         pbqs={[pbq]}
@@ -51,7 +51,8 @@ describe('StrictExamEngine training controls', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'Next question' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^next question$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^previous question$/i })).toBeDisabled();
   });
 
   it('hides exam metadata and provides a content-covering pause/resume control', () => {

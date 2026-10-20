@@ -351,12 +351,12 @@ export const mcqSingle: MCQuestion[] = [
   { id:'s163', domain:'D4', type:'single', difficulty:2, question:"A SOC wants every analyst to follow the same step-by-step actions when a phishing alert fires. Which artifact BEST captures this?", options:['A risk register entry','A documented playbook for the phishing scenario','A network diagram','A vendor SLA'], answer:1, explanation:'Playbooks codify the consistent procedure analysts follow for a specific incident type.', whyWrong:{0:'Risk registers track risk, not response steps.',2:'Diagrams show topology, not procedure.',3:'SLAs govern vendor obligations.'}, objective:'4.8' },
   { id:'s164', domain:'D5', type:'single', difficulty:2, question:'Which assessment evaluates a third party\'s security controls and practices?', options:['Penetration test','Vendor risk assessment','Gap analysis','Tabletop exercise'], answer:1, explanation:'Vendor risk assessments evaluate third-party security practices before engagement.', objective:'5.3' },
   { id:'s165', domain:'D2', type:'single', difficulty:3, question:"A user is logged into their bank in one tab and visits a malicious site in another that auto-submits a hidden funds-transfer form to the bank. Which attack is being attempted?", options:['SQL injection','Cross-site request forgery (CSRF)','Port scanning','SYN flood'], answer:1, explanation:'CSRF abuses the victim\'s authenticated session to submit attacker-chosen requests.', whyWrong:{0:'SQLi targets database queries, not session abuse.',2:'Port scanning is reconnaissance.',3:'SYN floods consume connection state, not user sessions.'}, objective:'2.4' },
-  { id:'s166', domain:'D3', type:'single', difficulty:2, question:"A web tier is overwhelmed by traffic and one server keeps melting down while others sit idle. Which control BEST resolves this?", options:['Add a load balancer to distribute requests across the pool','Enable full-disk encryption on the busy server','Move the database to a faster disk','Block ICMP at the firewall'], answer:1, explanation:'Load balancers spread requests so no single backend becomes the hotspot.', whyWrong:{1:'FDE protects data at rest, not throughput.',2:'Database disk speed is downstream of the web tier issue.',3:'Blocking ICMP does not change request distribution.'}, objective:'3.4' },
-  { id:'s167', domain:'D4', type:'single', difficulty:2, question:'What does EDR stand for?', options:['External Data Repository','Endpoint Detection and Response','Enterprise Digital Rights','Encrypted Data Recovery'], answer:1, explanation:'EDR monitors endpoints for threats and provides investigation and response capabilities.', objective:'4.4' },
+  { id:'s166', domain:'D3', type:'single', difficulty:2, question:"A web tier is overwhelmed by traffic and one server keeps melting down while others sit idle. Which control BEST resolves this?", options:['Add a load balancer to distribute requests across the pool','Enable full-disk encryption on the busy server','Move the database to a faster disk','Block ICMP at the firewall'], answer:0, explanation:'Load balancers spread requests so no single backend becomes the hotspot.', whyWrong:{1:'FDE protects data at rest, not throughput.',2:'Database disk speed is downstream of the web tier issue.',3:'Blocking ICMP does not change request distribution.'}, objective:'3.4' },
+  { id:'s167', domain:'D4', type:'single', difficulty:2, question:'An analyst wants endpoint telemetry to detect a suspicious script, isolate the host, and preserve forensic data. Which tool category fits BEST?', options:['External data repository','Endpoint detection and response (EDR)','Enterprise digital rights management','Encrypted data recovery appliance'], answer:1, explanation:'EDR continuously monitors endpoint behavior, can contain the host, and retains telemetry for investigation.', whyWrong:{0:'A repository stores data; it does not detect or respond to endpoint behavior.',2:'DRM governs content usage rights, not threat detection.',3:'Recovery appliances restore data after loss; they do not detect execution.'}, objective:'4.4' },
   { id:'s168', domain:'D5', type:'single', difficulty:2, question:"Before designing a continuity plan, an analyst must identify which business processes are critical and what an outage costs per hour. Which assessment delivers this?", options:['Business Impact Analysis (BIA)','Penetration test','Vendor risk questionnaire','Tabletop exercise'], answer:0, explanation:'A BIA quantifies criticality and impact, feeding RTO/RPO targets in the BCP.', whyWrong:{1:'Pen tests assess technical exposure, not process criticality.',2:'Vendor risk reviews evaluate suppliers.',3:'Tabletops validate plans that already exist.'}, objective:'5.2' },
   { id:'s169', domain:'D2', type:'single', difficulty:2, question:'What type of attack exploits the trust between a web application and its user\'s browser?', options:['SQL injection','XSS (Cross-Site Scripting)','Brute force','ARP poisoning'], answer:1, explanation:'XSS exploits the trust a user has for a website by injecting malicious scripts.', objective:'2.4' },
   { id:'s170', domain:'D3', type:'single', difficulty:2, question:"A firm requires the lowest possible RTO for its trading platform after a regional outage. Which DR site type BEST meets this?", options:['Cold site with shipped tapes','Warm site with weekly syncs','Hot site with continuous replication','Mobile site with prebuilt trailer'], answer:2, explanation:'A hot site is fully operational and continuously synchronized for near-instant failover.', whyWrong:{0:'Cold sites take days to bring online.',1:'Warm sites still need data hydration and configuration.',3:'Mobile sites prioritize portability, not RTO.'}, objective:'3.4' },
-  { id:'s171', domain:'D4', type:'single', difficulty:2, question:'What does DLP stand for?', options:['Data Loss Prevention','Digital License Protection','Dynamic Link Protocol','Distributed Layer Processing'], answer:0, explanation:'DLP monitors and prevents unauthorized data transfers or leaks.', objective:'4.4' },
+  { id:'s171', domain:'D4', type:'single', difficulty:2, question:'Customer records with Social Security numbers are being emailed to personal accounts. Which control is designed to block this?', options:['Data loss prevention (DLP)','Digital license protection','Dynamic link protocol filtering','Distributed layer processing'], answer:0, explanation:'DLP inspects content and blocks unauthorized transfers of sensitive data such as PII.', whyWrong:{1:'License protection manages software entitlements.',2:'Link filtering inspects URLs, not sensitive content leaving the network.',3:'Distributed processing describes workload architecture, not data controls.'}, objective:'4.4' },
   { id:'s172', domain:'D5', type:'single', difficulty:2, question:"Leadership wants risk reported in dollars to support insurance decisions. Which analysis approach should the risk team use?", options:['Qualitative analysis with high/medium/low ratings','Quantitative analysis using SLE, ARO, and ALE','Heat-map ranking only','Maturity-model scoring'], answer:1, explanation:'Quantitative analysis produces monetary loss estimates needed for insurance and ROI decisions.', whyWrong:{0:'Qualitative ratings are not monetary.',2:'Heat maps are visual qualitative outputs.',3:'Maturity scores measure capability, not loss.'}, objective:'5.2' },
   { id:'s173', domain:'D2', type:'single', difficulty:2, question:"Users report being redirected to \"bnak0famerica.com\" after mistyping their bank URL. Which attack are they experiencing?", options:['Pharming via DNS cache poisoning','Typosquatting on look-alike domains','Session hijacking','MAC spoofing'], answer:1, explanation:'Typosquatters register misspelled domains to capture mistyped traffic.', whyWrong:{0:'Pharming would redirect even correctly typed names.',2:'Session hijacking targets active sessions, not URL typos.',3:'MAC spoofing is layer-2 and unrelated to URLs.'}, objective:'2.2' },
   { id:'s174', domain:'D3', type:'single', difficulty:2, question:"An organization can tolerate a 48-hour RTO and wants to minimize standby costs. Which alternate site BEST balances cost and recovery time?", options:['Cold site (power and space only)','Warm site (some equipment and connectivity preinstalled)','Hot site (continuously replicated)','No site; rely on cloud failover only'], answer:1, explanation:'A warm site provides preinstalled equipment that can be brought up within the 48-hour window without paying for full hot-site readiness.', whyWrong:{0:'A cold site likely cannot meet 48 hours.',2:'A hot site exceeds the requirement at higher cost.',3:'No-site assumes a cloud plan that was not stated.'}, objective:'3.4' },
@@ -1283,7 +1283,34 @@ function pickN<T>(arr: T[], n: number): T[] {
   return shuffle(arr).slice(0, n);
 }
 
-export type ExamNumber = 1 | 2 | 3 | 4 | 5;
+export type ExamNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+
+export interface ExamSetDef {
+  number: ExamNumber;
+  label: string;
+  kind: 'balanced' | 'focus';
+  focus?: Domain;
+  blurb: string;
+}
+
+/**
+ * Exam sets. Six blueprint-balanced exams mirror the published SY0-701 domain
+ * mix; five domain-focused exams keep every domain present but weight one
+ * domain heavily so a weak area can be trained under full exam conditions.
+ */
+export const EXAM_SETS: ExamSetDef[] = [
+  { number: 1, label: 'Exam 1', kind: 'balanced', blurb: 'Blueprint mix' },
+  { number: 2, label: 'Exam 2', kind: 'balanced', blurb: 'Blueprint mix' },
+  { number: 3, label: 'Exam 3', kind: 'balanced', blurb: 'Blueprint mix' },
+  { number: 4, label: 'Exam 4', kind: 'balanced', blurb: 'Blueprint mix' },
+  { number: 5, label: 'Exam 5', kind: 'balanced', blurb: 'Blueprint mix' },
+  { number: 6, label: 'Exam 6', kind: 'balanced', blurb: 'Blueprint mix' },
+  { number: 7, label: 'Exam 7', kind: 'focus', focus: 'D1', blurb: 'Domain 1 heavy' },
+  { number: 8, label: 'Exam 8', kind: 'focus', focus: 'D2', blurb: 'Domain 2 heavy' },
+  { number: 9, label: 'Exam 9', kind: 'focus', focus: 'D3', blurb: 'Domain 3 heavy' },
+  { number: 10, label: 'Exam 10', kind: 'focus', focus: 'D4', blurb: 'Domain 4 heavy' },
+  { number: 11, label: 'Exam 11', kind: 'focus', focus: 'D5', blurb: 'Domain 5 heavy' },
+];
 
 export interface ExamConfig {
   examNumber: ExamNumber;
@@ -1337,101 +1364,141 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
   3: 999,
   4: 2024,
   5: 7331,
+  6: 8123,
+  7: 3101,
+  8: 3102,
+  9: 3103,
+  10: 3104,
+  11: 3105,
 };
 
-type UnifiedQ = { kind: 'mcq'; data: MCQuestion } | { kind: 'pbq'; data: PBQuestion };
+const TOTAL_EXAM_ITEMS = 90;
+const PBQS_PER_EXAM = 6;
+const FOCUS_WEIGHT = 0.4;
+
+/**
+ * Difficulty mix close to the real exam: mostly applied items, a slice of
+ * foundational recall and a small number of deep items. Hard items only fill
+ * in when a domain pool cannot supply enough medium/easy questions.
+ */
+function pickMcqs(pool: MCQuestion[], count: number, seed: number): MCQuestion[] {
+  if (count <= 0) return [];
+  const shuffled = seededShuffle(pool, seed);
+  const byDifficulty = (level: number) => shuffled.filter(q => q.difficulty === level);
+  const easy = byDifficulty(1);
+  const medium = byDifficulty(2);
+  const hard = byDifficulty(3);
+
+  const wantHard = Math.min(hard.length, Math.round(count * 0.12));
+  const wantEasy = Math.min(easy.length, Math.round(count * 0.25));
+  const wantMedium = Math.max(0, count - wantHard - wantEasy);
+
+  const picked = [
+    ...medium.slice(0, wantMedium),
+    ...easy.slice(0, wantEasy),
+    ...hard.slice(0, wantHard),
+  ];
+
+  if (picked.length < count) {
+    const pickedIds = new Set(picked.map(q => q.id));
+    picked.push(...shuffled.filter(q => !pickedIds.has(q.id)).slice(0, count - picked.length));
+  }
+
+  return picked.slice(0, count);
+}
 
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
-   const seed = EXAM_SEEDS[examNumber];
+  const def = EXAM_SETS.find(set => set.number === examNumber) ?? EXAM_SETS[0];
+  const seed = EXAM_SEEDS[def.number];
 
-   // Pick 6 PBQs (mix of types) — seeded per exam number
-   const fwPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'firewall'),     seed).slice(0, 2);
-   const irPbqs  = seededShuffle(pbqBank.filter(p => p.type === 'ordering'),     seed + 1).slice(0, 1);
-   const logPbqs = seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 2).slice(0, 1);
-   const matchPbqs = seededShuffle(pbqBank.filter(p => p.type === 'matching'),   seed + 3).slice(0, 1);
-   const placePbqs = seededShuffle(pbqBank.filter(p => p.type === 'placement'),  seed + 4).slice(0, 1);
-   const pbqs = shuffle([...fwPbqs, ...irPbqs, ...logPbqs, ...matchPbqs, ...placePbqs]);
+  const weights: Record<Domain, number> = { ...DOMAIN_WEIGHTS };
+  if (def.kind === 'focus' && def.focus) {
+    const others = (Object.keys(weights) as Domain[]).filter(d => d !== def.focus);
+    const otherTotal = others.reduce((sum, d) => sum + weights[d], 0);
+    others.forEach(d => { weights[d] = (weights[d] / otherTotal) * (1 - FOCUS_WEIGHT); });
+    weights[def.focus] = FOCUS_WEIGHT;
+  }
 
-   // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
-   // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).
-   const TOTAL = 90;
-   const targetTotals: Record<Domain, number> = {
-     D1: Math.round(DOMAIN_WEIGHTS.D1 * TOTAL), // 11
-     D2: Math.round(DOMAIN_WEIGHTS.D2 * TOTAL), // 20
-     D3: Math.round(DOMAIN_WEIGHTS.D3 * TOTAL), // 16
-     D4: Math.round(DOMAIN_WEIGHTS.D4 * TOTAL), // 25
-     D5: Math.round(DOMAIN_WEIGHTS.D5 * TOTAL), // 18
-   };
-   const pbqCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
-   pbqs.forEach(p => { pbqCounts[p.domain]++; });
+  const targetTotals = Object.fromEntries(
+    (Object.keys(weights) as Domain[]).map(d => [d, Math.max(3, Math.round(weights[d] * TOTAL_EXAM_ITEMS))]),
+  ) as Record<Domain, number>;
 
-   const mcqTarget = TOTAL - pbqs.length; // 84
-   const domainCounts: Record<Domain, number> = { D1:0, D2:0, D3:0, D4:0, D5:0 };
-   let assigned = 0;
-   (['D1','D2','D3','D4','D5'] as Domain[]).forEach(d => {
-     const need = Math.max(0, targetTotals[d] - pbqCounts[d]);
-     domainCounts[d] = need;
-     assigned += need;
-   });
-   // Fix any rounding drift so MCQ count == mcqTarget. Adjust D4 (largest pool) first.
-   let drift = mcqTarget - assigned;
-   const adjustOrder: Domain[] = ['D4','D2','D5','D3','D1'];
-   for (const d of adjustOrder) {
-     if (drift === 0) break;
-     if (drift > 0) { domainCounts[d]++; drift--; }
-     else if (domainCounts[d] > 0) { domainCounts[d]--; drift++; }
-   }
+  const baselinePbqs = [
+    ...seededShuffle(pbqBank.filter(p => p.type === 'firewall'), seed).slice(0, 2),
+    ...seededShuffle(pbqBank.filter(p => p.type === 'ordering'), seed + 1).slice(0, 1),
+    ...seededShuffle(pbqBank.filter(p => p.type === 'log-analysis'), seed + 2).slice(0, 1),
+    ...seededShuffle(pbqBank.filter(p => p.type === 'matching'), seed + 3).slice(0, 1),
+    ...seededShuffle(pbqBank.filter(p => p.type === 'placement'), seed + 4).slice(0, 1),
+  ];
+  const focusPbqs = def.kind === 'focus' && def.focus
+    ? seededShuffle(pbqBank.filter(p => p.domain === def.focus), seed + 9).slice(0, 3)
+    : [];
+  const pbqPool = [...focusPbqs, ...baselinePbqs].filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
+  const pbqs = seededShuffle(pbqPool.slice(0, PBQS_PER_EXAM), seed + 21);
 
-   const selectedMCQ: MCQuestion[] = [];
-   const usedIds = new Set<string>();
+  const pbqCounts: Record<Domain, number> = { D1: 0, D2: 0, D3: 0, D4: 0, D5: 0 };
+  pbqs.forEach(p => { pbqCounts[p.domain]++; });
 
-   const selectTwoByDomain: Record<Domain, MCQuestion[]> = { D1:[], D2:[], D3:[], D4:[], D5:[] };
-   mcqSelectTwo.forEach(q => selectTwoByDomain[q.domain].push(q));
+  const mcqTarget = TOTAL_EXAM_ITEMS - pbqs.length;
+  const domainCounts: Record<Domain, number> = { D1: 0, D2: 0, D3: 0, D4: 0, D5: 0 };
+  const available: Record<Domain, number> = { D1: 0, D2: 0, D3: 0, D4: 0, D5: 0 };
 
-   for (const [domain, count] of Object.entries(domainCounts) as [Domain, number][]) {
-     if (count <= 0) continue;
-     const domainSingle    = seededShuffle(mcqSingle.filter(q => q.domain === domain), seed + domain.charCodeAt(1));
-     const domainSelectTwo = seededShuffle(selectTwoByDomain[domain],                  seed + domain.charCodeAt(1) + 50);
+  (Object.keys(domainCounts) as Domain[]).forEach(d => {
+    domainCounts[d] = Math.max(0, targetTotals[d] - pbqCounts[d]);
+    available[d] = mcqSingle.filter(q => q.domain === d).length + mcqSelectTwo.filter(q => q.domain === d).length;
+  });
 
-     // Up to 2 select-two per domain (capped at the domain's MCQ count)
-     const stPicked = domainSelectTwo.slice(0, Math.min(2, count, domainSelectTwo.length));
-     stPicked.forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
+  // Keep the total at the target without ever exceeding a domain's pool.
+  let drift = mcqTarget - (Object.values(domainCounts) as number[]).reduce((sum, n) => sum + n, 0);
+  const order: Domain[] = def.focus
+    ? [def.focus, 'D4', 'D2', 'D5', 'D3', 'D1']
+    : ['D4', 'D2', 'D5', 'D3', 'D1'];
+  while (drift !== 0) {
+    let changed = false;
+    for (const d of order) {
+      if (drift === 0) break;
+      if (drift > 0 && domainCounts[d] < available[d]) { domainCounts[d]++; drift--; changed = true; }
+      else if (drift < 0 && domainCounts[d] > 1) { domainCounts[d]--; drift++; changed = true; }
+    }
+    if (!changed) break;
+  }
 
-     // Fill remaining with single-answer
-     const remaining = count - stPicked.length;
-     domainSingle
-       .filter(q => !usedIds.has(q.id))
-       .slice(0, remaining)
-       .forEach(q => { selectedMCQ.push(shuffleOptions(q)); usedIds.add(q.id); });
-   }
+  const selectTwoByDomain: Record<Domain, MCQuestion[]> = { D1: [], D2: [], D3: [], D4: [], D5: [] };
+  mcqSelectTwo.forEach(q => selectTwoByDomain[q.domain].push(q));
 
-   // Scramble PBQs throughout the exam instead of putting them first
-   const allQuestions: UnifiedQ[] = [
-     ...selectedMCQ.map(q => ({ kind: 'mcq' as const, data: q })),
-     ...pbqs.map(q => ({ kind: 'pbq' as const, data: q }))
-   ];
-   
-   // Shuffle all questions together to distribute PBQs throughout the exam
-   const shuffledQuestions = shuffle(allQuestions);
-   
-   // But we need to preserve the PBQ/MCQ distinction for the engine
-   const scrambledPbqs: PBQuestion[] = [];
-   const scrambledMcqs: MCQuestion[] = [];
-   
-   shuffledQuestions.forEach(q => {
-     if (q.kind === 'pbq') {
-       scrambledPbqs.push(q.data);
-     } else {
-       scrambledMcqs.push(q.data);
-     }
-   });
+  const selectedMCQ: MCQuestion[] = [];
+  (Object.keys(domainCounts) as Domain[]).forEach(domain => {
+    const count = domainCounts[domain];
+    if (count <= 0) return;
 
-   return {
-     examNumber,
-     pbqs: scrambledPbqs,
-     mcqs: scrambledMcqs,
-     totalQuestions: scrambledPbqs.length + scrambledMcqs.length,
-   };
+    const selectTwo = seededShuffle(selectTwoByDomain[domain], seed + domain.charCodeAt(1) + 50)
+      .slice(0, Math.min(2, count));
+    selectTwo.forEach(q => selectedMCQ.push(shuffleOptions(q)));
+
+    const singles = pickMcqs(
+      mcqSingle.filter(q => q.domain === domain),
+      count - selectTwo.length,
+      seed + domain.charCodeAt(1),
+    );
+    singles.forEach(q => selectedMCQ.push(shuffleOptions(q)));
+  });
+
+  // Final guard: rounding drift must never shorten or lengthen the form.
+  if (selectedMCQ.length < mcqTarget) {
+    const usedIds = new Set(selectedMCQ.map(q => q.id));
+    const filler = seededShuffle(
+      [...mcqSingle, ...mcqSelectTwo].filter(q => !usedIds.has(q.id)),
+      seed + 131,
+    );
+    filler.slice(0, mcqTarget - selectedMCQ.length).forEach(q => selectedMCQ.push(shuffleOptions(q)));
+  }
+
+  return {
+    examNumber: def.number,
+    pbqs,
+    mcqs: seededShuffle(selectedMCQ, seed + 77),
+    totalQuestions: pbqs.length + selectedMCQ.length,
+  };
 }
 
 export function buildStudyQuestions(domain?: Domain): MCQuestion[] {

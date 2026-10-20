@@ -8,11 +8,10 @@ const ROUTE_META: Record<string, { title: string; kicker: string }> = {
   '/': { title: 'Command Center', kicker: 'Training overview' },
   '/study': { title: 'Study', kicker: 'Adaptive practice' },
   '/pbq': { title: 'PBQ Lab', kicker: 'Applied security tasks' },
-  '/exam': { title: 'Exam Simulation', kicker: 'Full-length rehearsal' },
+  '/exam': { title: 'Exams', kicker: 'Full-length rehearsal' },
   '/review': { title: 'Review', kicker: 'Remediation queue' },
   '/analytics': { title: 'Analytics', kicker: 'Performance intelligence' },
   '/settings': { title: 'Settings', kicker: 'Training controls' },
-  '/sim': { title: 'Exam Simulator', kicker: 'Pearson VUE format' },
 };
 
 function daysUntil(date: string | null) {
@@ -31,6 +30,7 @@ export default function AppLayout() {
     || Object.entries(ROUTE_META).find(([key]) => key !== '/' && location.pathname.startsWith(key + '/'))?.[1]
     || { title: 'SecPlus Trainer', kicker: 'SY0-701' };
   const examDays = daysUntil(settings.target_exam_date);
+  const isExamRoute = location.pathname === '/exam' || location.pathname.startsWith('/exam/');
 
   return (
     <SidebarProvider defaultOpen>
@@ -47,7 +47,7 @@ export default function AppLayout() {
             </div>
 
             <div className="ml-auto flex items-center gap-2">
-              {examDays !== null && examDays >= 0 && (
+              {!isExamRoute && examDays !== null && examDays >= 0 && (
                 <button
                   onClick={() => navigate('/settings')}
                   className="hidden items-center gap-2 rounded-lg border border-border bg-card/70 px-2.5 py-1.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:flex"
@@ -56,13 +56,15 @@ export default function AppLayout() {
                   <span>{examDays === 0 ? 'Exam today' : `${examDays}d to target`}</span>
                 </button>
               )}
-              <button
-                onClick={() => navigate('/settings')}
-                className="hidden h-8 w-8 items-center justify-center rounded-lg border border-border bg-card/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:flex"
-                aria-label="Open training settings"
-              >
-                <Settings2 className="h-4 w-4" />
-              </button>
+              {!isExamRoute && (
+                <button
+                  onClick={() => navigate('/settings')}
+                  className="hidden h-8 w-8 items-center justify-center rounded-lg border border-border bg-card/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:flex"
+                  aria-label="Open training settings"
+                >
+                  <Settings2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </header>
           <main className="relative z-10 min-w-0 flex-1">

@@ -1,11 +1,10 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   BookOpen,
   Gauge,
   History,
   Layers3,
-  MonitorPlay,
   Settings,
   ShieldCheck,
   Target,
@@ -30,10 +29,9 @@ const groups = [
     label: 'Train',
     items: [
       { title: 'Command Center', url: '/', icon: Gauge },
-      { title: 'Exam Simulator', url: '/sim', icon: MonitorPlay },
+      { title: 'Exams', url: '/exam', icon: Target },
       { title: 'Study', url: '/study', icon: BookOpen },
       { title: 'PBQ Lab', url: '/pbq', icon: Layers3 },
-      { title: 'Exam Simulation', url: '/exam', icon: Target },
     ],
   },
   {
@@ -49,13 +47,23 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (url: string) => url === '/' ? pathname === '/' : pathname.startsWith(url);
+
+  const guardNavigation = (url: string) => (event: React.MouseEvent) => {
+    if (document.body.dataset.examActive !== 'true') return;
+    event.preventDefault();
+    const leave = window.confirm('An exam is in progress. Leaving now ends the run and discards the timer. Leave?');
+    if (!leave) return;
+    delete document.body.dataset.examActive;
+    navigate(url);
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/80">
       <SidebarHeader className="p-3">
-        <NavLink to="/" className="flex min-h-11 items-center gap-3 rounded-xl px-1">
+        <NavLink to="/" onClick={guardNavigation("/")} className="flex min-h-11 items-center gap-3 rounded-xl px-1">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
             <ShieldCheck className="h-5 w-5" />
           </div>
@@ -86,7 +94,7 @@ export function AppSidebar() {
                       tooltip={item.title}
                       className="h-10 rounded-lg data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
                     >
-                      <NavLink to={item.url} end={item.url === '/'} className="flex items-center gap-3">
+                      <NavLink to={item.url} end={item.url === '/'} onClick={guardNavigation(item.url)} className="flex items-center gap-3">
                         <item.icon className="h-4 w-4" />
                         {!collapsed && <span className="text-sm">{item.title}</span>}
                       </NavLink>
@@ -110,7 +118,7 @@ export function AppSidebar() {
               tooltip="Settings"
               className="h-10 rounded-lg data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
             >
-              <NavLink to="/settings" className="flex items-center gap-3">
+              <NavLink to="/settings" onClick={guardNavigation("/settings")} className="flex items-center gap-3">
                 <Settings className="h-4 w-4" />
                 {!collapsed && <span className="text-sm">Settings</span>}
               </NavLink>
