@@ -594,7 +594,26 @@ export function StrictExamEngine({
               <StrictMCQ
                 q={current.data}
                 answer={mcqAnswers[current.data.id]}
-                onAnswer={answer => setMcqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
+                onAnswer={answer => {
+                  const dataId = current.data.id;
+                  const complete = current.data.type === 'single' ? true : Array.isArray(answer) && answer.length === 2;
+                  let changed = true;
+
+                  setMcqAnswers(previous => {
+                    const before = previous[dataId];
+                    const same = before === answer
+                      || (Array.isArray(before) && Array.isArray(answer)
+                        && before.length === answer.length
+                        && before.every(value => answer.includes(value)));
+                    if (same) {
+                      changed = false;
+                      return previous;
+                    }
+                    return { ...previous, [dataId]: answer };
+                  });
+
+                  if (complete && changed) goToQuestion(idx + 1);
+                }}
               />
             )}
           </section>
@@ -807,7 +826,7 @@ function StrictMCQ({
             <button
               key={index}
               onClick={() => choose(index)}
-              className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm leading-6 transition-all ${
+              className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm leading-6 ${
                 selected
                   ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
                   : 'border-border bg-background/40 hover:border-primary/40 hover:bg-muted/30'
