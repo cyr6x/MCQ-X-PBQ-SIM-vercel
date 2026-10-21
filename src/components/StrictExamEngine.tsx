@@ -699,7 +699,7 @@ export function StrictExamEngine({
               type="button"
               onClick={() => goToQuestion(idx - 1)}
               disabled={idx === 0}
-              className="pointer-events-auto absolute left-0 top-1/2 flex min-h-[72px] min-w-[56px] -translate-y-1/2 items-center justify-center rounded-r-xl border-y border-r border-primary/40 bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-xl"
+              className="pointer-events-auto absolute left-4 top-1/2 -translate-y-1/2 flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary/40 bg-primary/90 text-primary-foreground shadow-xl hover:bg-primary active:scale-[0.98] transition-none"
               aria-label="Previous question"
               title="Previous question"
             >
@@ -709,7 +709,7 @@ export function StrictExamEngine({
             <button
               type="button"
               onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
-              className="pointer-events-auto absolute right-0 top-1/2 flex min-h-[72px] min-w-[56px] -translate-y-1/2 items-center justify-center rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-base font-bold text-primary-foreground shadow-xl"
+              className="pointer-events-auto absolute right-4 top-1/2 -translate-y-1/2 flex h-14 w-14 items-center justify-center rounded-full border-2 border-primary/40 bg-primary/90 text-primary-foreground shadow-xl hover:bg-primary active:scale-[0.98] transition-none"
               aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
               title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
             >
