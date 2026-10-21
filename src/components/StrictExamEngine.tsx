@@ -330,7 +330,7 @@ export function StrictExamEngine({
   ]);
 
   useEffect(() => {
-    if (phase === 'submitted' || isPaused) return;
+    if (phase === 'submitted' || phase === 'review' || isPaused) return;
 
     const tick = () => {
       const elapsed = Math.floor(
@@ -823,10 +823,17 @@ function ExamTopBar({
             <Home className="h-4 w-4" />
             <span className="hidden sm:inline">Home</span>
           </button>
-          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
-            <Clock className="h-4 w-4" />
-            <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>
-            {timerDisplay}
+          <div className="flex items-center gap-2">
+            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
+              <Clock className="h-4 w-4" />
+              <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>
+              {timerDisplay}
+            </div>
+            {isPaused && (
+              <span className="flex items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-warning">
+                <Pause className="h-3 w-3" /> PAUSED
+              </span>
+            )}
           </div>
         </div>
       </div>
