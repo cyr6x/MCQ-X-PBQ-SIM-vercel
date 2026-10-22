@@ -1341,6 +1341,30 @@ const EXAM_SEEDS: Record<ExamNumber, number> = {
   5: 7331,
 };
 
+// Partition PBQs by type so each exam form gets unique PBQs without overlap
+function partitionPBQsByForm(pbqs: PBQuestion[], formCount: number): PBQuestion[][] {
+  // Group PBQs by type to ensure variety in each form
+  const byType = new Map<PBQuestion['type'], PBQuestion[]>();
+  for (const q of pbqs) {
+    if (!byType.has(q.type)) byType.set(q.type, []);
+    byType.get(q.type)!.push(q);
+  }
+
+  const forms: PBQuestion[][] = Array.from({ length: formCount }, () => []);
+  const typeEntries = Array.from(byType.entries());
+  
+  // Distribute each type across forms evenly
+  for (const [type, questions] of typeEntries) {
+    const shuffled = seededShuffle(questions, 9001 + type.charCodeAt(0));
+    shuffled.forEach((q, i) => {
+      forms[i % formCount].push(q);
+    });
+  }
+
+  // Shuffle each form's PBQs independently
+  return forms.map((form, i) => seededShuffle(form, EXAM_SEEDS[(i + 1) as ExamNumber] + 5000));
+}
+
 export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
   const seed = EXAM_SEEDS[examNumber];
 
@@ -1348,19 +1372,25 @@ export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
   // count. Avoid teaching candidates to expect exactly six every time.
   const pbqTargetByExam: Record<ExamNumber, number> = { 1: 5, 2: 4, 3: 6, 4: 5, 5: 4 };
   const pbqTarget = pbqTargetByExam[examNumber];
-  const pbqCandidates = seededShuffle(pbqBank, seed + 700);
+
+  // Pre-partition PBQs so each form gets unique PBQs
+  const partitionedForms = partitionPBQsByForm(pbqBank, 5);
+  const formPbqs = partitionedForms[examNumber - 1];
+
+  // Pick target count from this form's allocated PBQs, prioritizing type variety
   const pickedPbqs: PBQuestion[] = [];
   const seenTypes = new Set<PBQuestion['type']>();
 
-  // First pass maximizes interaction variety, then fill from the shuffled pool.
-  for (const candidate of pbqCandidates) {
+  // First pass: maximize interaction variety
+  for (const candidate of formPbqs) {
     if (pickedPbqs.length >= pbqTarget) break;
     if (!seenTypes.has(candidate.type)) {
       pickedPbqs.push(candidate);
       seenTypes.add(candidate.type);
     }
   }
-  for (const candidate of pbqCandidates) {
+  // Second pass: fill remaining slots
+  for (const candidate of formPbqs) {
     if (pickedPbqs.length >= pbqTarget) break;
     if (!pickedPbqs.some(p => p.id === candidate.id)) pickedPbqs.push(candidate);
   }

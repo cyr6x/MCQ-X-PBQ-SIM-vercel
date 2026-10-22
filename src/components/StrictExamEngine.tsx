@@ -56,7 +56,7 @@ export function StrictExamEngine({
   );
 
   const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<'item' | 'review' | 'submitted'>('item');
+  const [phase, setPhase] = useState<'item' | 'review' | 'postReview' | 'submitted'>('item');
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>('all');
   const [pbqAnswers, setPbqAnswers] = useState<Record<string, unknown>>({});
   const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>({});
@@ -192,7 +192,8 @@ export function StrictExamEngine({
     setScoreResult(result);
     setShowEndConfirm(false);
     setIsPaused(false);
-    setPhase('submitted');
+    // Transition to post-exam review using the in-exam review UI
+    setPhase('postReview');
   }, [
     mcqAnswers,
     mcqs,
@@ -284,12 +285,101 @@ export function StrictExamEngine({
           mcqAnswers={mcqAnswers}
           flags={flags}
           questionOrder={questions.map(question => question.data.id)}
-          onRestart={() => window.location.reload()}
-          onBackToMenu={() => {
-            if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-            onFinish();
-          }}
+          onRestart={restartExam}
+          onBackToMenu={exitToDashboard}
         />
+      </div>
+    );
+  }
+
+  if (phase === 'postReview' && scoreResult) {
+    // Post-exam review using the in-exam review UI
+    const reviewFilter = ['all', 'incorrect', 'flagged'] as const;
+    const visibleQuestions = questions
+      .map((question, index) => ({ question, index }))
+      .filter(({ question }) => {
+        if (reviewFilter[0] === 'incomplete') return !isAnswered(question);
+        if (reviewFilter[0] === 'flagged') return flags.has(question.data.id);
+        return true;
+      });
+
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <ExamTopBar
+          timerDisplay={`Score: ${scoreResult.scaledScore} / 900`}
+          examNumber={examNumber}
+          timerTone={scoreResult.passed ? 'normal' : 'destructive'}
+          pauseEnabled={false}
+          isPaused={false}
+          onPause={() => {}}
+        />
+        <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
+          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="border-b border-border bg-muted/40 px-5 py-3">
+              <h1 className="text-base font-semibold">Post-Exam Review — Form {examNumber}</h1>
+            </div>
+
+            <div className="border-b border-border px-5 py-4 text-sm leading-6 text-muted-foreground">
+              Review all items with explanations and correct answers. Your original answers are shown alongside the correct ones.
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+              <div className="text-sm font-semibold">
+                Items <span className="font-normal text-destructive">({incompleteCount} Unseen/Incomplete)</span>
+              </div>
+              <div className="text-xs text-muted-foreground">{flags.size} flagged</div>
+            </div>
+
+            <div className="grid gap-px bg-border p-px sm:grid-cols-2 lg:grid-cols-3">
+              {visibleQuestions.map(({ question, index }) => {
+                const answered = isAnswered(question);
+                const flagged = flags.has(question.data.id);
+                const correct = question.kind === 'pbq'
+                  ? isPBQCorrect(question.data, pbqAnswers[question.data.id])
+                  : isMCQCorrect(question.data, mcqAnswers[question.data.id]);
+                return (
+                  <button
+                    key={question.data.id}
+                    onClick={() => { setReviewFilter('all'); goToQuestion(index); setPhase('item'); }}
+                    className="flex min-h-14 items-center gap-3 bg-card px-4 py-3 text-left hover:bg-muted/50"
+                  >
+                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/40'}`} />
+                    <span className="font-mono text-sm font-semibold">Question {index + 1}</span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      {!answered && <span className="text-[11px] font-semibold text-destructive">Incomplete</span>}
+                      {answered && correct ? (
+                        <span className="text-[11px] font-semibold text-success">✓</span>
+                      ) : answered ? (
+                        <span className="text-[11px] font-semibold text-destructive">✗</span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {visibleQuestions.length === 0 && (
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                No items match this review filter.
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-4">
+              <button
+                onClick={exitToDashboard}
+                className="mr-auto rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-muted"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={restartExam}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+              >
+                New Exam
+              </button>
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
@@ -397,6 +487,89 @@ export function StrictExamEngine({
     );
   }
 
+  if (phase === 'postReview' && scoreResult) {
+    // Post-exam review using the in-exam review UI
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <ExamTopBar
+          timerDisplay={`Score: ${scoreResult.scaledScore} / 900`}
+          examNumber={examNumber}
+          timerTone={scoreResult.passed ? 'normal' : 'destructive'}
+          pauseEnabled={false}
+          isPaused={false}
+          onPause={() => {}}
+        />
+        <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
+          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="border-b border-border bg-muted/40 px-5 py-3">
+              <h1 className="text-base font-semibold">Post-Exam Review — Form {examNumber}</h1>
+            </div>
+
+            <div className="border-b border-border px-5 py-4 text-sm leading-6 text-muted-foreground">
+              Review all items with explanations and correct answers. Your original answers are shown alongside the correct ones.
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+              <div className="text-sm font-semibold">
+                Items <span className="font-normal text-destructive">({incompleteCount} Unseen/Incomplete)</span>
+              </div>
+              <div className="text-xs text-muted-foreground">{flags.size} flagged</div>
+            </div>
+
+            <div className="grid gap-px bg-border p-px sm:grid-cols-2 lg:grid-cols-3">
+              {visibleQuestions.map(({ question, index }) => {
+                const answered = isAnswered(question);
+                const flagged = flags.has(question.data.id);
+                const correct = question.kind === 'pbq'
+                  ? isPBQCorrect(question.data, pbqAnswers[question.data.id])
+                  : isMCQCorrect(question.data, mcqAnswers[question.data.id]);
+                return (
+                  <button
+                    key={question.data.id}
+                    onClick={() => { setReviewFilter('all'); goToQuestion(index); setPhase('item'); }}
+                    className="flex min-h-14 items-center gap-3 bg-card px-4 py-3 text-left hover:bg-muted/50"
+                  >
+                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/40'}`} />
+                    <span className="font-mono text-sm font-semibold">Question {index + 1}</span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      {!answered && <span className="text-[11px] font-semibold text-destructive">Incomplete</span>}
+                      {answered && correct ? (
+                        <span className="text-[11px] font-semibold text-success">✓</span>
+                      ) : answered ? (
+                        <span className="text-[11px] font-semibold text-destructive">✗</span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {visibleQuestions.length === 0 && (
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                No items match this review filter.
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-4">
+              <button
+                onClick={exitToDashboard}
+                className="mr-auto rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-muted"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={restartExam}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+              >
+                New Exam
+              </button>
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
   if (!current) return null;
 
   const openReview = () => {
@@ -404,6 +577,15 @@ export function StrictExamEngine({
     recordCurrentItemTime();
     setReviewFilter('all');
     setPhase('review');
+  };
+
+  const exitToDashboard = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    onFinish();
+  };
+
+  const restartExam = () => {
+    window.location.reload();
   };
 
   return (
@@ -613,9 +795,13 @@ function StrictMCQ({
       return;
     }
 
+    // Normalize answer to array for select-two
     const current = Array.isArray(answer) ? answer : [];
-    if (current.includes(index)) onAnswer(current.filter(value => value !== index));
-    else if (current.length < 2) onAnswer([...current, index]);
+    if (current.includes(index)) {
+      onAnswer(current.filter(value => value !== index));
+    } else if (current.length < 2) {
+      onAnswer([...current, index]);
+    }
   };
 
   return (
