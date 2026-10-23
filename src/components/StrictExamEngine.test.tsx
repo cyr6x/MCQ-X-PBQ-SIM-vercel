@@ -1,12 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { StrictExamEngine } from '@/components/StrictExamEngine';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
+import { hasExamSession, loadExamSession } from '@/lib/examSession';
+import { mcqSingle, mcqSelectTwo } from '@/data/questions';
+import { loadHistory } from '@/lib/examHistory';
 
 vi.mock('@/lib/SettingsContext', () => ({
   useSettings: () => ({
     settings: {
-      exam_pause_enabled: true,
       exam_auto_fullscreen: false,
       exam_focus_notice: true,
       amber_threshold_seconds: 1200,
@@ -70,8 +72,282 @@ describe('StrictExamEngine training controls', () => {
     fireEvent.click(screen.getByRole('button', { name: /pause/i }));
     expect(screen.getByText('Exam paused')).toBeInTheDocument();
     expect(screen.getByText(/countdown and question timer are stopped/i)).toBeInTheDocument();
+    expect(screen.getByText(/exam stays saved/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
     expect(screen.queryByText('Exam paused')).not.toBeInTheDocument();
+  });
+
+  it('counts down each second, and pausing freezes the clock', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      render(
+        <StrictExamEngine
+          pbqs={[]}
+          mcqs={[mcq]}
+          durationMinutes={90}
+          onFinish={() => {}}
+        />
+      );
+      expect(screen.getByText('90:00')).toBeInTheDocument();
+
+      // 2 minutes pass — the countdown drops by exactly 2 minutes.
+      act(() => {
+        vi.advanceTimersByTime(2 * 60 * 1000);
+      });
+      expect(screen.getByText('88:00')).toBeInTheDocument();
+
+      // Paused: 5 more minutes pass and the clock must NOT move.
+      fireEvent.click(screen.getByRole('button', { name: /pause/i }));
+      act(() => {
+        vi.advanceTimersByTime(5 * 60 * 1000);
+      });
+      expect(screen.getByText('88:00')).toBeInTheDocument();
+
+      // Resumed: the countdown continues from where it froze.
+      fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
+      act(() => {
+        vi.advanceTimersByTime(60 * 1000);
+      });
+      expect(screen.getByText('87:00')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('StrictExamEngine session persistence', () => {
+  const selectThree: MCQuestion = {
+    id: 'select-three-mcq',
+    domain: 'D5',
+    objective: '5.4',
+    difficulty: 2,
+    type: 'select-three',
+    question: 'Which THREE controls should be implemented?',
+    options: ['Geo restrictions', 'SIEM logs', 'Time-of-day rules', 'Password length'],
+    answer: [0, 1, 2],
+    explanation: 'The first three controls meet the requirements.',
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('accepts exactly three selections on a select-three item and shows the badge', () => {
+    render(
+      <StrictExamEngine
+        pbqs={[]}
+        mcqs={[selectThree]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Select exactly three')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Geo restrictions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /SIEM logs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Time-of-day rules/ }));
+    // A fourth pick is silently ignored (cap = 3)
+    fireEvent.click(screen.getByRole('button', { name: /Password length/ }));
+    // The badge stays up; the three chosen options remain selected.
+    expect(screen.getByText('Select exactly three')).toBeInTheDocument();
+  });
+
+  it('saves the attempt continuously and resumes 1:1 (answers, position, frozen countdown)', () => {
+    const { unmount } = render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    // Answer the MCQ (find it via its option text).
+    fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+    // Move forward one item.
+    fireEvent.click(screen.getByRole('button', { name: /next question|review exam/i }));
+    // Leaving (accidental exit) saves the session.
+    unmount();
+
+    const saved = loadExamSession();
+    expect(saved).not.toBeNull();
+    expect(saved!.mcqAnswers[mcq.id]).toBe(1);
+    expect(saved!.questions).toHaveLength(2);
+
+    // Time away does NOT burn the clock: the saved countdown is restored
+    // exactly, and a session saved as paused resumes paused (frozen timer).
+    const resumed = {
+      ...saved!,
+      remainingSeconds: 10 * 60,
+      isPaused: true,
+    };
+    render(
+      <StrictExamEngine
+        pbqs={saved!.questions.filter(q => q.kind === 'pbq').map(q => q.data as PBQuestion)}
+        mcqs={saved!.questions.filter(q => q.kind === 'mcq').map(q => q.data as MCQuestion)}
+        durationMinutes={90}
+        initialSession={resumed}
+        onFinish={() => {}}
+      />
+    );
+
+    expect(screen.getByText('10:00')).toBeInTheDocument();
+    expect(screen.getByText('Exam paused')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /resume exam/i }));
+    expect(screen.queryByText('Exam paused')).not.toBeInTheDocument();
+  });
+
+  it('auto-submits the LATEST answers when the countdown reaches zero', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      render(
+        <StrictExamEngine
+          pbqs={[pbq]}
+          mcqs={[mcq]}
+          durationMinutes={90}
+          onFinish={() => {}}
+        />
+      );
+
+      // Answer, then let the full 90 minutes elapse.
+      fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+      act(() => {
+        vi.advanceTimersByTime(90 * 60 * 1000);
+      });
+
+      expect(hasExamSession()).toBe(false);
+      const history = loadHistory();
+      const attempt = history[history.length - 1];
+      expect(attempt).toBeDefined();
+      // The stale-closure bug used to submit the EMPTY answers from mount.
+      expect(attempt.questions.find(q => q.questionId === mcq.id)?.userAnswer).toBe(`B. ${mcq.options[1]}`);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaving (unmount) keeps the exam SAVED and resumable — never ends it', () => {
+    const { unmount } = render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+    fireEvent.click(screen.getByRole('button', { name: /pause/i }));
+    unmount();
+
+    // Hitting Settings and coming back must find the attempt intact.
+    const saved = loadExamSession();
+    expect(saved).not.toBeNull();
+    expect(saved!.mcqAnswers[mcq.id]).toBe(1);
+    expect(saved!.isPaused).toBe(true);
+    expect(saved!.remainingSeconds).toBe(90 * 60);
+  });
+
+  it('scrolls back to the top of the question panel on every question change', () => {
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollTo = scrollSpy;
+
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    scrollSpy.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /next question|review exam/i }));
+    expect(scrollSpy).toHaveBeenCalledWith({ top: 0 });
+    Element.prototype.scrollTo = () => {};
+  });
+
+  it('clears the session on submit and stores readable answers in history', () => {
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[mcq]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    // Work through both items.
+    fireEvent.click(screen.getByRole('button', { name: /Control B/ }));
+    fireEvent.click(screen.getByRole('button', { name: /next question|review exam/i }));
+    // Answer the firewall PBQ.
+    fireEvent.click(screen.getByRole('button', { name: 'ALLOW' }));
+    // Enter review and end the exam (edge button + footer button both match).
+    fireEvent.click(screen.getAllByRole('button', { name: /review exam/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'End Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'End Exam' }));
+
+    expect(hasExamSession()).toBe(false);
+    const history = loadHistory();
+    expect(history.length).toBeGreaterThan(0);
+    const attempt = history[history.length - 1];
+    const mcqAttempt = attempt.questions.find(q => q.questionId === mcq.id);
+    const pbqAttempt = attempt.questions.find(q => q.questionId === pbq.id);
+    expect(mcqAttempt?.userAnswer).toBe(`B. ${mcq.options[1]}`);
+    expect(pbqAttempt?.userAnswer).toBe('Rule actions: ALLOW');
+    expect(pbqAttempt?.correctAnswer).toBe('Rule actions: ALLOW');
+  });
+
+  it('REAL regression: the insurance THREE question accepts exactly its 3 correct options', () => {
+    const s128 = [...mcqSingle, ...mcqSelectTwo].find(q => q.id === 's128');
+    if (!s128) throw new Error('s128 missing from bank');
+
+    render(
+      <StrictExamEngine
+        pbqs={[]}
+        mcqs={[s128]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Select exactly three')).toBeInTheDocument();
+    expect(screen.getByText(/Which THREE/i)).toBeInTheDocument();
+
+    // The three keyed controls are selectable.
+    fireEvent.click(screen.getByRole('button', { name: /IP\/GPS login restrictions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Consolidate logs on SIEM/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Time-of-day restrictions/ }));
+    // The 4th selection is silently ignored (cap = 3, not 1, not 2).
+    fireEvent.click(screen.getByRole('button', { name: /Add password complexity/ }));
+
+    // Submitting scores exactly three answers on the saved attempt.
+    fireEvent.click(screen.getAllByRole('button', { name: /review exam/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'End Review' }));
+    fireEvent.click(screen.getByRole('button', { name: 'End Exam' }));
+
+    const history = loadHistory();
+    const attempt = history[history.length - 1];
+    const saved = attempt.questions.find(q => q.questionId === 's128');
+    expect(saved?.isCorrect).toBe(true);
+    expect(saved?.userAnswer).toContain('IP/GPS login restrictions');
+    expect(saved?.userAnswer).toContain('Consolidate logs on SIEM');
+    expect(saved?.userAnswer).toContain('Time-of-day restrictions');
+  });
+
+  it('masks the PBQ title until results are shown', () => {
+    render(
+      <StrictExamEngine
+        pbqs={[pbq]}
+        mcqs={[]}
+        durationMinutes={90}
+        onFinish={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Performance-Based Question')).toBeInTheDocument();
+    expect(screen.queryByText('Firewall task')).not.toBeInTheDocument();
   });
 });

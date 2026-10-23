@@ -17,7 +17,6 @@ export interface UserSettings {
 
   // Local-only training controls. Keeping these local avoids breaking older
   // user_settings schemas while still giving the simulator useful flexibility.
-  exam_pause_enabled: boolean;
   exam_auto_fullscreen: boolean;
   exam_focus_notice: boolean;
   sprint_question_count: number;
@@ -35,7 +34,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   amber_threshold_seconds: 1200,
   red_threshold_seconds: 300,
   confidence_required: 'optional',
-  exam_pause_enabled: true,
   exam_auto_fullscreen: false,
   exam_focus_notice: true,
   sprint_question_count: 30,

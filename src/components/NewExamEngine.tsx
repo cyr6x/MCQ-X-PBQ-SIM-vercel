@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Flag, ChevronLeft, ChevronRight, ListChecks, CheckCircle2, XCircle, AlertTriangle, Clock, Pause, Play, Shuffle, LogOut } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { MCQuestion, PBQuestion } from '@/data/questions';
-import { isMCQCorrect, isPBQCorrect, calculateScore, type ScoreResult } from '@/lib/examEngine';
+import { isMCQCorrect, isPBQCorrect, calculateScore, selectionCount, mcqAnswerText, pbqAnswerText, pbqCorrectText, type ScoreResult } from '@/lib/examEngine';
 import { ExamResults } from '@/components/ExamResults';
 import { PBQRenderer } from '@/components/PBQRenderer';
 import { EvidenceBlocks } from '@/components/EvidenceBlocks';
@@ -10,6 +10,7 @@ import { saveAttempt, type QuestionAttempt, type ExamAttempt } from '@/lib/examH
 import { DOMAIN_LABELS } from '@/data/questions';
 import { objectiveLabel } from '@/lib/sy0701Objectives';
 import { buildStudyOrder, type StudyQuestion } from '@/lib/studyOrder';
+import { setStudyActive } from '@/lib/examSession';
 
 interface NewExamEngineProps {
   pbqs: PBQuestion[];
@@ -57,6 +58,14 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
 
   const cur = questions[idx];
   const qId = cur.kind === 'pbq' ? cur.data.id : cur.data.id;
+
+  // While a study session is running, sidebar links / trainer shortcuts must
+  // confirm before pulling the user out (the session itself is not persisted).
+  useEffect(() => {
+    if (submitted) return;
+    setStudyActive(true);
+    return () => setStudyActive(false);
+  }, [submitted]);
 
   // Timer logic with Pause
   useEffect(() => {
@@ -156,8 +165,10 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         domain: DOMAIN_LABELS[q.domain],
         type: 'pbq' as const,
         isCorrect: isPBQCorrect(q, pbqAnswers[q.id]),
-        userAnswer: JSON.stringify(pbqAnswers[q.id] || {}),
-        correctAnswer: '',
+        userAnswer: pbqAnswerText(q, pbqAnswers[q.id]),
+        correctAnswer: pbqCorrectText(q),
+        rawAnswer: JSON.stringify(pbqAnswers[q.id] ?? null),
+        rawQuestion: JSON.stringify(q),
         explanation: q.explanation,
         timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),
@@ -168,8 +179,8 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
         domain: DOMAIN_LABELS[q.domain],
         type: 'mcq' as const,
         isCorrect: isMCQCorrect(q, mcqAnswers[q.id]),
-        userAnswer: mcqAnswers[q.id] !== undefined ? String(mcqAnswers[q.id]) : 'Not answered',
-        correctAnswer: String(q.answer),
+        userAnswer: mcqAnswerText(q, mcqAnswers[q.id]),
+        correctAnswer: mcqAnswerText(q, q.answer),
         explanation: q.explanation,
         timeSpentSeconds: finalQuestionTimes[q.id] || 0,
         timestamp: Date.now(),
@@ -201,6 +212,14 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
     if (newIdx === idx) return;
     setIdx(newIdx);
   };
+
+  // Land at the top of each question. Previously the scroll position carried
+  // over, so after a long PBQ the next question appeared mid-scroll and the
+  // Next button felt broken.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+    document.querySelector('main')?.scrollTo?.({ top: 0 });
+  }, [idx]);
 
   const handleShuffle = () => {
     // Reshuffle question order + reset progress so the new order isn't mixed with
@@ -308,7 +327,11 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
           <div className="h-8 w-[1px] bg-border mx-2 hidden sm:block" />
           <div className="hidden sm:flex items-center gap-2">
             <span className={`px-2 py-1 rounded text-[10px] font-black tracking-tighter ${cur.kind === 'pbq' ? 'bg-accent text-accent-foreground' : 'bg-primary/10 text-primary'}`}>
-              {cur.kind === 'pbq' ? 'PERFORMANCE-BASED' : cur.data.type === 'select-two' ? 'SELECT TWO' : 'MULTIPLE CHOICE'}
+              {cur.kind === 'pbq'
+                ? 'PERFORMANCE-BASED'
+                : cur.data.type === 'single'
+                  ? 'MULTIPLE CHOICE'
+                  : `SELECT ${selectionCount(cur.data) === 2 ? 'TWO' : 'THREE'}`}
             </span>
           </div>
         </div>
@@ -348,7 +371,7 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
           <button
             onClick={() => {
               if (isStudyMode || submitted) { onFinish(); return; }
-              if (confirm('Exit this exam? Your progress will be lost and the attempt will NOT be saved.')) {
+              if (confirm('Exit this session? Your progress will be lost and the attempt will NOT be saved.')) {
                 onFinish();
               }
             }}
@@ -436,9 +459,9 @@ export function NewExamEngine({ pbqs, mcqs, durationMinutes, isStudyMode = false
               </div>
 
               {cur.kind === 'pbq' ? (
-                <PBQRenderer q={cur.data} ans={pbqAnswers[cur.data.id]} onAns={a => setPbqAnswers(p => ({...p,[cur.data.id]:a}))} submitted={submitted} studyRevealed={isStudyMode && studyRevealed.has(cur.data.id)} />
+                <PBQRenderer key={cur.data.id} q={cur.data} ans={pbqAnswers[cur.data.id]} onAns={a => setPbqAnswers(p => ({...p,[cur.data.id]:a}))} submitted={submitted} studyRevealed={isStudyMode && studyRevealed.has(cur.data.id)} />
               ) : (
-                <MCQRenderer q={cur.data} ans={mcqAnswers[cur.data.id]} onAns={a => setMcqAnswers(p => ({...p,[cur.data.id]:a}))} submitted={submitted} studyRevealed={isStudyMode && studyRevealed.has(cur.data.id)} />
+                <MCQRenderer key={cur.data.id} q={cur.data} ans={mcqAnswers[cur.data.id]} onAns={a => setMcqAnswers(p => ({...p,[cur.data.id]:a}))} submitted={submitted} studyRevealed={isStudyMode && studyRevealed.has(cur.data.id)} />
               )}
             </div>
 
@@ -532,7 +555,7 @@ function MCQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: MCQuestio
       const prev = (ans as number[] | undefined) || [];
       if (prev.includes(i)) {
         onAns(prev.filter(x => x !== i));
-      } else if (prev.length < 2) {
+      } else if (prev.length < selectionCount(q)) {
         onAns([...prev, i]);
       }
     }
@@ -541,7 +564,7 @@ function MCQRenderer({ q, ans, onAns, submitted, studyRevealed }: { q: MCQuestio
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
       <h3 className="text-xl font-bold leading-relaxed mb-5">{q.question}</h3>
-      {q.type === 'select-two' && <div className="mb-4 px-3 py-1 rounded bg-accent/10 border border-accent/20 text-accent text-[10px] font-black inline-block tracking-widest">SELECT EXACTLY TWO</div>}
+      {q.type !== 'single' && <div className="mb-4 px-3 py-1 rounded bg-accent/10 border border-accent/20 text-accent text-[10px] font-black inline-block tracking-widest">SELECT EXACTLY {selectionCount(q) === 2 ? 'TWO' : 'THREE'}</div>}
       <EvidenceBlocks evidence={q.evidence} />
       
       <div className="grid gap-3">

@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Eye,
   EyeOff,
   Filter,
@@ -14,11 +16,13 @@ import {
   Trophy,
   XCircle,
 } from 'lucide-react';
-import { pbqBank, DOMAIN_LABELS, type PBQuestion, type Domain } from '@/data/questions';
-import { getPBQCredit, isPBQCorrect } from '@/lib/examEngine';
+import { pbqBank, DOMAIN_LABELS, shufflePBQOptions, type PBQuestion, type Domain } from '@/data/questions';
+import { getPBQCredit, isPBQCorrect, pbqAnswerText, pbqCorrectText } from '@/lib/examEngine';
 import { saveAttempt, type QuestionAttempt } from '@/lib/examHistory';
 import { useSettings } from '@/lib/SettingsContext';
 import { PBQRenderer } from '@/components/PBQRenderer';
+import { PBQReviewDetail } from '@/components/PBQReviewDetail';
+import { setStudyActive } from '@/lib/examSession';
 import { MetricCard, PageHeader, Panel, StatusChip } from '@/components/product/ProductUI';
 
 type PBQType = PBQuestion['type'];
@@ -65,6 +69,7 @@ export function PBQPractice({ onFinish }: Props) {
   const [idx, setIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const questionTimesRef = useRef<Record<string, number>>({});
   const questionStartedAtRef = useRef(Date.now());
   const sessionStartedAtRef = useRef(Date.now());
@@ -103,13 +108,29 @@ export function PBQPractice({ onFinish }: Props) {
 
   const startPractice = () => {
     if (!pool.length) return;
-    setQuestions([...pool].sort(() => Math.random() - 0.5).slice(0, settings.pbq_set_size));
+    // Shuffle question order AND option lists — in the raw bank the correct
+    // log-analysis response is always the first option, which made the right
+    // answer obvious without reading the scenario.
+    setQuestions(
+      [...pool]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, settings.pbq_set_size)
+        .map(shufflePBQOptions),
+    );
     setIdx(0);
     setAnswers({});
     setRevealed(new Set());
     resetTiming();
     setView('practice');
   };
+
+  // While a practice set is running, sidebar links / trainer shortcuts must
+  // confirm before pulling the user out (the set itself is not persisted).
+  useEffect(() => {
+    if (view !== 'practice') return;
+    setStudyActive(true);
+    return () => setStudyActive(false);
+  }, [view]);
 
   const goTo = (nextIndex: number) => {
     if (nextIndex < 0 || nextIndex >= questions.length) return;
@@ -137,8 +158,10 @@ export function PBQPractice({ onFinish }: Props) {
         domain,
         type: 'pbq' as const,
         isCorrect: isPBQCorrect(question, answers[question.id]),
-        userAnswer: JSON.stringify(answers[question.id] ?? {}),
-        correctAnswer: '',
+        userAnswer: pbqAnswerText(question, answers[question.id]),
+        correctAnswer: pbqCorrectText(question),
+        rawAnswer: JSON.stringify(answers[question.id] ?? null),
+        rawQuestion: JSON.stringify(question),
         explanation: question.explanation,
         timeSpentSeconds: questionTimesRef.current[question.id] || 0,
         timestamp: endedAt,
@@ -272,23 +295,47 @@ export function PBQPractice({ onFinish }: Props) {
         </div>
 
         <Panel className="mt-4" title="Set breakdown" eyebrow="Items">
+          <p className="-mt-2 mb-3 text-xs text-muted-foreground">
+            Tap any item to see exactly which sub-answers you missed — your attempt next to the model solution.
+          </p>
           <div className="space-y-2">
             {results.map((result, index) => {
               const percent = Math.round(result.credit.ratio * 100);
+              const open = expanded.has(result.question.id);
               return (
                 <div
                   key={result.question.id}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-muted/20 px-3 py-3"
+                  className={`rounded-xl border px-3 py-3 ${open ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'}`}
                 >
-                  {result.correct
-                    ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                    : result.credit.ratio > 0
-                      ? <Target className="h-4 w-4 shrink-0 text-warning" />
-                      : <XCircle className="h-4 w-4 shrink-0 text-destructive" />}
-                  <span className="font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
-                  <StatusChip tone="primary">{TYPE_LABELS[result.question.type]}</StatusChip>
-                  <span className="min-w-0 flex-1 truncate text-sm">{result.question.title}</span>
-                  <span className="font-mono text-xs font-semibold">{percent}%</span>
+                  <button
+                    onClick={() =>
+                      setExpanded((previous) => {
+                        const next = new Set(previous);
+                        if (next.has(result.question.id)) next.delete(result.question.id);
+                        else next.add(result.question.id);
+                        return next;
+                      })
+                    }
+                    className="flex w-full items-center gap-3 text-left"
+                  >
+                    {result.correct
+                      ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                      : result.credit.ratio > 0
+                        ? <Target className="h-4 w-4 shrink-0 text-warning" />
+                        : <XCircle className="h-4 w-4 shrink-0 text-destructive" />}
+                    <span className="font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
+                    <StatusChip tone="primary">{TYPE_LABELS[result.question.type]}</StatusChip>
+                    <span className="min-w-0 flex-1 truncate text-sm">{result.question.title}</span>
+                    <span className="font-mono text-xs font-semibold">{percent}%</span>
+                    {open
+                      ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                  </button>
+                  {open && (
+                    <div className="mt-3 border-t border-border pt-3">
+                      <PBQReviewDetail q={result.question} answer={answers[result.question.id]} />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -298,7 +345,7 @@ export function PBQPractice({ onFinish }: Props) {
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             onClick={() => {
-              setQuestions([...questions].sort(() => Math.random() - 0.5));
+              setQuestions([...questions].sort(() => Math.random() - 0.5).map(shufflePBQOptions));
               setIdx(0);
               setAnswers({});
               setRevealed(new Set());

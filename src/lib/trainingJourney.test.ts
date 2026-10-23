@@ -38,7 +38,7 @@ function modelPBQAnswer(q: PBQuestion): unknown {
 }
 
 function wrongMCQAnswer(q: MCQuestion): number | number[] {
-  if (q.type === 'select-two') return [];
+  if (q.type !== 'single') return [];
   const correct = q.answer as number;
   return (correct + 1) % q.options.length;
 }
@@ -50,12 +50,22 @@ describe('full training journey whitebox', () => {
         expect(q.answer).toBeGreaterThanOrEqual(0);
         expect(q.answer).toBeLessThan(q.options.length);
       } else {
-        expect(q.answer).toHaveLength(2);
-        expect(new Set(q.answer).size).toBe(2);
-        q.answer.forEach((index) => {
+        const key = q.answer as number[];
+        const expectedCount = q.type === 'select-three' ? 3 : 2;
+        expect(key).toHaveLength(expectedCount);
+        expect(new Set(key).size).toBe(expectedCount);
+        key.forEach((index) => {
           expect(index).toBeGreaterThanOrEqual(0);
           expect(index).toBeLessThan(q.options.length);
         });
+        if (q.type === 'select-three') {
+          // Every distractor needs a whyWrong note so review can explain all misses.
+          q.options.forEach((_, index) => {
+            if (!key.includes(index)) {
+              expect(q.whyWrong?.[index], `s-select-three distractor ${q.id}:${index}`).toBeTruthy();
+            }
+          });
+        }
       }
     });
 

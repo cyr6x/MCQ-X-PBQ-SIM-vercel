@@ -29,10 +29,12 @@ export type EvidenceBlock =
   | { type: 'log' | 'terminal' | 'packet' | 'note'; title: string; lines: string[]; caption?: string }
   | { type: 'table'; title: string; headers: string[]; rows: string[][]; caption?: string };
 
+export type MCQType = 'single' | 'select-two' | 'select-three';
+
 export interface MCQuestion {
   id: string;
   domain: Domain;
-  type: 'single' | 'select-two';
+  type: MCQType;
   difficulty: 1 | 2 | 3;
   question: string;
   options: string[];
@@ -42,6 +44,16 @@ export interface MCQuestion {
   objective?: string;
   reference?: string;
   evidence?: EvidenceBlock[];
+}
+
+/**
+ * How many options a question requires the candidate to pick.
+ * 'single' → 1, 'select-two' → 2, 'select-three' → 3.
+ */
+export function selectionCount(q: MCQuestion): number {
+  if (q.type === 'select-two') return 2;
+  if (q.type === 'select-three') return 3;
+  return 1;
 }
 
 /* =================================================================
@@ -308,7 +320,7 @@ const baseMcqSingle: MCQuestion[] = [
   { id:'s126', domain:'D4', type:'single', difficulty:2, question:'A system admin receives a text alert when access rights change on a database. What describes this alert?', options:['Maintenance window','Attestation and acknowledgment','Automation','External audit'], answer:2, explanation:'Automated alerts triggered by access changes are a form of security automation.', objective:'4.7' },
   { id:'s127', domain:'D4', type:'single', difficulty:2, question:'A security engineer runs monthly vulnerability scans. What type of activity?', options:['Threat hunting','Vulnerability management','Penetration testing','Incident response'], answer:1, explanation:'Regular vulnerability scanning is a core vulnerability management activity.', objective:'4.3' },
   // More D5
-  { id:'s128', domain:'D5', type:'single', difficulty:2, question:'An insurance company requires: access records archived, after-hours alerts, geo-restrictions, centralized logs. Which THREE should be implemented?', options:['IP/GPS login restrictions','Require government ID during onboarding','Add password complexity','Monthly permission auditing','Consolidate logs on SIEM','Archive disabled account keys','Time-of-day restrictions'], answer:0, explanation:'IP/GPS restrictions, SIEM log consolidation, and time-of-day restrictions meet all requirements.', objective:'5.4' },
+  { id:'s128', domain:'D5', type:'select-three', difficulty:2, question:'An insurance company requires: access records archived, after-hours alerts, geo-restrictions, centralized logs. Which THREE should be implemented?', options:['IP/GPS login restrictions','Require government ID during onboarding','Add password complexity','Monthly permission auditing','Consolidate logs on SIEM','Archive disabled account keys','Time-of-day restrictions'], answer:[0,4,6], explanation:'IP/GPS restrictions, SIEM log consolidation, and time-of-day restrictions meet all requirements.', whyWrong:{1:'Government ID checks at onboarding do not archive access records, alert after hours, restrict by geography, or centralize logs.',2:'Password complexity addresses credential strength, not any of the four stated requirements.',3:'Monthly permission auditing is good hygiene, but it does not satisfy archiving, after-hours alerts, geo-restrictions, or centralized logging by itself.',5:'Archiving keys of disabled accounts does not meet the access-record, alerting, geo-restriction, or log-centralization requirements.'}, objective:'5.4' },
   { id:'s129', domain:'D5', type:'single', difficulty:2, question:'A security admin examined a compromised server and found it was exploited due to a known OS vulnerability. What describes this finding?', options:['Root cause analysis','E-discovery','Risk appetite','Data subject'], answer:0, explanation:'Identifying the known vulnerability as the cause is root cause analysis.', objective:'5.2' },
   // Fill to 200
   { id:'s130', domain:'D2', type:'single', difficulty:2, question:'What kind of security control is a login banner?', options:['Preventive','Deterrent','Corrective','Detective'], answer:1, explanation:'Login banners deter unauthorized use by warning about legal consequences.', objective:'2.5' },
@@ -1322,7 +1334,8 @@ export function shuffleOptions(q: MCQuestion): MCQuestion {
       )
     : undefined;
 
-  if (q.type === 'select-two') {
+  if (q.type !== 'single') {
+    // Multi-select (select-two / select-three)
     const oldAnswers = q.answer as number[];
     const newAnswers = oldAnswers.map(oldIdx => shuffled.findIndex(x => x.i === oldIdx));
     return { ...q, options: newOptions, answer: newAnswers.sort((a, b) => a - b), whyWrong: newWhyWrong };
@@ -1330,6 +1343,65 @@ export function shuffleOptions(q: MCQuestion): MCQuestion {
 
   const newAnswer = shuffled.findIndex(x => x.i === (q.answer as number));
   return { ...q, options: newOptions, answer: newAnswer, whyWrong: newWhyWrong };
+}
+
+/**
+ * Randomize the option lists of a PBQ so the correct choice is not always in
+ * the same position (in the raw bank every log-analysis response is option A
+ * and the source IP is listed first). Answers compared as plain strings keep
+ * working; index-keyed answers (log-analysis / packet-analysis responses,
+ * terminal tasks) have their correct index remapped to the shuffled list. The
+ * same shuffled copy must be used for rendering, scoring and persistence —
+ * the exam session snapshot and exam results both receive it by reference.
+ *
+ * - log-analysis: attack type / source IP / response option orders
+ * - packet-analysis: attack / response option orders (response index remapped)
+ * - terminal: each task's options (correctIndex remapped)
+ * - matching / placement / topology: category and zone column orders
+ * - firewall / ordering: rule and step order is part of the task — untouched
+ */
+export function shufflePBQOptions(q: PBQuestion): PBQuestion {
+  switch (q.type) {
+    case 'log-analysis': {
+      const shuffled = shuffle(q.responseOptions.map((opt, i) => ({ opt, i })));
+      return {
+        ...q,
+        attackTypeOptions: shuffle(q.attackTypeOptions),
+        sourceIPOptions: shuffle(q.sourceIPOptions),
+        responseOptions: shuffled.map(x => x.opt),
+        correctResponse: shuffled.findIndex(x => x.i === q.correctResponse),
+      };
+    }
+    case 'packet-analysis': {
+      const shuffled = shuffle(q.responseOptions.map((opt, i) => ({ opt, i })));
+      return {
+        ...q,
+        attackOptions: shuffle(q.attackOptions),
+        responseOptions: shuffled.map(x => x.opt),
+        correctResponse: shuffled.findIndex(x => x.i === q.correctResponse),
+      };
+    }
+    case 'terminal':
+      return {
+        ...q,
+        tasks: q.tasks.map(task => {
+          const shuffled = shuffle(task.options.map((opt, i) => ({ opt, i })));
+          return {
+            ...task,
+            options: shuffled.map(x => x.opt),
+            correctIndex: shuffled.findIndex(x => x.i === task.correctIndex),
+          };
+        }),
+      };
+    case 'matching':
+      return { ...q, rightOptions: shuffle(q.rightOptions) };
+    case 'placement':
+      return { ...q, zones: shuffle(q.zones) };
+    case 'topology':
+      return { ...q, zones: shuffle(q.zones) };
+    default:
+      return q;
+  }
 }
 
 // ── Exam seeds — each number yields a distinct, reproducible pool ─
@@ -1364,7 +1436,9 @@ export function buildExam(examNumber: ExamNumber = 1): ExamConfig {
     if (pickedPbqs.length >= pbqTarget) break;
     if (!pickedPbqs.some(p => p.id === candidate.id)) pickedPbqs.push(candidate);
   }
-  const pbqs = pickedPbqs;
+  // Shuffle option lists (answer indices remapped) so the correct choice is
+  // not always in the same position within each PBQ.
+  const pbqs = pickedPbqs.map(shufflePBQOptions);
 
   // Compute MCQ counts so PBQ+MCQ totals match official SY0-701 weights as closely as possible.
   // Official targets out of 90: D1≈11, D2≈20, D3≈16, D4≈25, D5≈18 (sum 90).

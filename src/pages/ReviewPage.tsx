@@ -6,6 +6,7 @@ import {
   mcqSelectTwo,
   pbqBank,
   shuffleOptions,
+  shufflePBQOptions,
   type MCQuestion,
   type PBQuestion,
 } from '@/data/questions';
@@ -13,6 +14,8 @@ import type { QuestionStats } from '@/lib/examHistory';
 import { useSettings } from '@/lib/SettingsContext';
 import { useProgressSnapshot } from '@/hooks/useProgressSnapshot';
 import { MetricCard, PageHeader, Panel, StatusChip } from '@/components/product/ProductUI';
+import { PBQReviewDetail } from '@/components/PBQReviewDetail';
+import { pbqAnswerText } from '@/lib/examEngine';
 
 type ReviewFilter = 'needs' | 'all' | 'mcq' | 'pbq';
 
@@ -34,13 +37,24 @@ function buildRetest(stats: QuestionStats[]): RetestSet {
   const pbqs = stats
     .filter((item) => item.type === 'pbq')
     .map((item) => pbqById.get(item.questionId))
-    .filter((question): question is PBQuestion => Boolean(question));
+    .filter((question): question is PBQuestion => Boolean(question))
+    .map(shufflePBQOptions);
 
   return { mcqs, pbqs };
 }
 
 function formatLatestAnswer(stat: QuestionStats): string {
-  if (stat.type === 'pbq') return 'Interactive PBQ response saved — retry the item to work it again.';
+  if (stat.type === 'pbq') {
+    const pbq = pbqById.get(stat.questionId);
+    if (pbq) {
+      try {
+        return pbqAnswerText(pbq, JSON.parse(stat.userAnswer)) || 'No answer saved';
+      } catch {
+        // fall through to raw text below
+      }
+    }
+    return stat.userAnswer || 'No answer saved';
+  }
 
   const question = mcqById.get(stat.questionId);
   if (!question) return stat.userAnswer || 'No answer saved';
@@ -220,6 +234,34 @@ export default function ReviewPage() {
                             <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-destructive">Latest answer</div>
                             <p className="text-sm leading-6 text-foreground/80">{formatLatestAnswer(stat)}</p>
                           </section>
+                          {stat.type === 'pbq' && pbqById.get(stat.questionId) && (
+                            <section>
+                              <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-primary">Your PBQ attempt vs. model solution</div>
+                              {(() => {
+                                // Prefer the raw answer object; fall back to the
+                                // display text if it was saved by an older build.
+                                let savedAnswer: unknown;
+                                try {
+                                  savedAnswer = JSON.parse(stat.rawAnswer || stat.userAnswer);
+                                } catch {
+                                  savedAnswer = undefined;
+                                }
+                                // Prefer the exact shuffled variant the user
+                                // answered against (option order differs per
+                                // attempt); fall back to the bank question.
+                                let variant = pbqById.get(stat.questionId);
+                                if (stat.rawQuestion) {
+                                  try {
+                                    variant = JSON.parse(stat.rawQuestion);
+                                  } catch {
+                                    /* keep bank variant */
+                                  }
+                                }
+                                if (!variant) return null;
+                                return <PBQReviewDetail q={variant} answer={savedAnswer} />;
+                              })()}
+                            </section>
+                          )}
                           <section>
                             <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-success">Why</div>
                             <p className="text-sm leading-6 text-foreground/80">{stat.explanation || 'Explanation will be captured on the next retest.'}</p>
