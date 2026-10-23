@@ -61,6 +61,7 @@ export function StrictExamEngine({
   const [pbqAnswers, setPbqAnswers] = useState<Record<string, unknown>>({});
   const [mcqAnswers, setMcqAnswers] = useState<Record<string, number | number[]>>({});
   const [flags, setFlags] = useState<Set<string>>(new Set());
+  const [reviewMode, setReviewMode] = useState(false);
   const [remaining, setRemaining] = useState(durationMinutes * 60);
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
@@ -205,7 +206,7 @@ export function StrictExamEngine({
   ]);
 
   useEffect(() => {
-    if (phase === 'submitted' || isPaused) return;
+    if (phase === 'submitted' || isPaused || reviewMode) return;
 
     const tick = () => {
       const elapsed = Math.floor(
@@ -219,7 +220,7 @@ export function StrictExamEngine({
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, [durationMinutes, finishExam, isPaused, phase]);
+  }, [durationMinutes, finishExam, isPaused, phase, reviewMode]);
 
   useEffect(() => {
     if (phase === 'submitted') return;
@@ -292,98 +293,6 @@ export function StrictExamEngine({
     );
   }
 
-  if (phase === 'postReview' && scoreResult) {
-    // Post-exam review using the in-exam review UI
-    const reviewFilter = ['all', 'incorrect', 'flagged'] as const;
-    const visibleQuestions = questions
-      .map((question, index) => ({ question, index }))
-      .filter(({ question }) => {
-        if (reviewFilter[0] === 'incomplete') return !isAnswered(question);
-        if (reviewFilter[0] === 'flagged') return flags.has(question.data.id);
-        return true;
-      });
-
-    return (
-      <div className="min-h-screen bg-background text-foreground">
-        <ExamTopBar
-          timerDisplay={`Score: ${scoreResult.scaledScore} / 900`}
-          examNumber={examNumber}
-          timerTone={scoreResult.passed ? 'normal' : 'destructive'}
-          pauseEnabled={false}
-          isPaused={false}
-          onPause={() => {}}
-        />
-        <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
-          <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            <div className="border-b border-border bg-muted/40 px-5 py-3">
-              <h1 className="text-base font-semibold">Post-Exam Review — Form {examNumber}</h1>
-            </div>
-
-            <div className="border-b border-border px-5 py-4 text-sm leading-6 text-muted-foreground">
-              Review all items with explanations and correct answers. Your original answers are shown alongside the correct ones.
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
-              <div className="text-sm font-semibold">
-                Items <span className="font-normal text-destructive">({incompleteCount} Unseen/Incomplete)</span>
-              </div>
-              <div className="text-xs text-muted-foreground">{flags.size} flagged</div>
-            </div>
-
-            <div className="grid gap-px bg-border p-px sm:grid-cols-2 lg:grid-cols-3">
-              {visibleQuestions.map(({ question, index }) => {
-                const answered = isAnswered(question);
-                const flagged = flags.has(question.data.id);
-                const correct = question.kind === 'pbq'
-                  ? isPBQCorrect(question.data, pbqAnswers[question.data.id])
-                  : isMCQCorrect(question.data, mcqAnswers[question.data.id]);
-                return (
-                  <button
-                    key={question.data.id}
-                    onClick={() => { setReviewFilter('all'); goToQuestion(index); setPhase('item'); }}
-                    className="flex min-h-14 items-center gap-3 bg-card px-4 py-3 text-left hover:bg-muted/50"
-                  >
-                    <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/40'}`} />
-                    <span className="font-mono text-sm font-semibold">Question {index + 1}</span>
-                    <span className="ml-auto flex items-center gap-1.5">
-                      {!answered && <span className="text-[11px] font-semibold text-destructive">Incomplete</span>}
-                      {answered && correct ? (
-                        <span className="text-[11px] font-semibold text-success">✓</span>
-                      ) : answered ? (
-                        <span className="text-[11px] font-semibold text-destructive">✗</span>
-                      ) : null}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {visibleQuestions.length === 0 && (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-                No items match this review filter.
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-4 py-4">
-              <button
-                onClick={exitToDashboard}
-                className="mr-auto rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-muted"
-              >
-                Back to Dashboard
-              </button>
-              <button
-                onClick={restartExam}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
-              >
-                New Exam
-              </button>
-            </div>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
   const topBar = (
     <ExamTopBar
       timerDisplay={timerDisplay}
@@ -406,7 +315,17 @@ export function StrictExamEngine({
 
     return (
       <div className="min-h-screen bg-background text-foreground">
-        {topBar}
+      {!reviewMode ? topBar : (
+        <ExamTopBar
+          timerDisplay={`Score: ${scoreResult?.scaledScore ?? 0} / 900`}
+          examNumber={examNumber}
+          timerTone={scoreResult?.passed ? 'normal' : 'destructive'}
+          pauseEnabled={false}
+          isPaused={false}
+          onPause={() => {}}
+          reviewMode
+        />
+      )}
         {isPaused && <PauseOverlay onResume={togglePause} />}
         <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
           <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -526,7 +445,7 @@ export function StrictExamEngine({
                 return (
                   <button
                     key={question.data.id}
-                    onClick={() => { setReviewFilter('all'); goToQuestion(index); setPhase('item'); }}
+                    onClick={() => { setReviewFilter('all'); setReviewMode(true); goToQuestion(index); setPhase('item'); }}
                     className="flex min-h-14 items-center gap-3 bg-card px-4 py-3 text-left hover:bg-muted/50"
                   >
                     <Flag className={`h-4 w-4 shrink-0 ${flagged ? 'fill-current text-warning' : 'text-muted-foreground/40'}`} />
@@ -588,6 +507,11 @@ export function StrictExamEngine({
     window.location.reload();
   };
 
+  const exitReviewMode = () => {
+    setReviewMode(false);
+    setPhase('postReview');
+  };
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {topBar}
@@ -635,8 +559,8 @@ export function StrictExamEngine({
               <PBQRenderer
                 q={current.data}
                 ans={pbqAnswers[current.data.id]}
-                onAns={answer => setPbqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
-                submitted={false}
+                onAns={reviewMode ? undefined : (answer => setPbqAnswers(previous => ({ ...previous, [current.data.id]: answer })))}
+                submitted={reviewMode}
                 studyRevealed={false}
                 examMode
               />
@@ -644,7 +568,8 @@ export function StrictExamEngine({
               <StrictMCQ
                 q={current.data}
                 answer={mcqAnswers[current.data.id]}
-                onAnswer={answer => setMcqAnswers(previous => ({ ...previous, [current.data.id]: answer }))}
+                onAnswer={reviewMode ? undefined : (answer => setMcqAnswers(previous => ({ ...previous, [current.data.id]: answer })))}
+                reviewMode={reviewMode}
               />
             )}
           </section>
@@ -675,22 +600,22 @@ export function StrictExamEngine({
               </button>
             ) : (
               <button
-                onClick={openReview}
+                onClick={reviewMode ? exitReviewMode : openReview}
                 className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 md:hidden"
               >
-                Review Exam <ChevronRight className="h-4 w-4" />
+                {reviewMode ? 'Back to Review Grid' : 'Review Exam'} <ChevronRight className="h-4 w-4" />
               </button>
             )}
           </footer>
         </div>
 
         <button
-          onClick={idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview}
+          onClick={reviewMode ? exitReviewMode : (idx < questions.length - 1 ? () => goToQuestion(idx + 1) : openReview)}
           className="fixed right-0 top-1/2 z-50 hidden -translate-y-1/2 items-center gap-2 rounded-l-xl border-y border-l border-primary/40 bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-xl transition-all hover:pl-5 hover:opacity-95 md:flex"
-          aria-label={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
-          title={idx < questions.length - 1 ? 'Next question' : 'Review exam'}
+          aria-label={reviewMode ? 'Back to review grid' : idx < questions.length - 1 ? 'Next question' : 'Review exam'}
+          title={reviewMode ? 'Back to review grid' : idx < questions.length - 1 ? 'Next question' : 'Review exam'}
         >
-          <span>{idx < questions.length - 1 ? 'Next' : 'Review'}</span>
+          <span>{reviewMode ? 'Back to grid' : idx < questions.length - 1 ? 'Next' : 'Review'}</span>
           <ChevronRight className="h-5 w-5" />
         </button>
       </main>
@@ -705,6 +630,7 @@ function ExamTopBar({
   pauseEnabled,
   isPaused,
   onPause,
+  reviewMode = false,
 }: {
   timerDisplay: string;
   examNumber: number;
@@ -712,6 +638,7 @@ function ExamTopBar({
   pauseEnabled: boolean;
   isPaused: boolean;
   onPause: () => void;
+  reviewMode?: boolean;
 }) {
   const timerClass =
     timerTone === 'destructive'
@@ -732,7 +659,7 @@ function ExamTopBar({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {pauseEnabled && (
+          {pauseEnabled && !reviewMode && (
             <button
               onClick={onPause}
               className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -741,11 +668,13 @@ function ExamTopBar({
               <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
             </button>
           )}
-          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
-            <Clock className="h-4 w-4" />
-            <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>
-            {timerDisplay}
-          </div>
+          {!reviewMode && (
+            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 font-mono text-sm font-bold ${timerClass}`}>
+              <Clock className="h-4 w-4" />
+              <span className="hidden text-[10px] font-sans font-normal uppercase tracking-wider sm:inline">Time</span>
+              {timerDisplay}
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -779,17 +708,25 @@ function StrictMCQ({
   q,
   answer,
   onAnswer,
+  reviewMode = false,
 }: {
   q: MCQuestion;
   answer?: number | number[];
-  onAnswer: (answer: number | number[]) => void;
+  onAnswer?: (answer: number | number[]) => void;
+  reviewMode?: boolean;
 }) {
   const isSelected = (index: number) =>
     q.type === 'single'
       ? answer === index
       : Array.isArray(answer) && answer.includes(index);
 
+  const isCorrect = (index: number) =>
+    q.type === 'single'
+      ? q.answer === index
+      : Array.isArray(q.answer) && q.answer.includes(index);
+
   const choose = (index: number) => {
+    if (reviewMode || !onAnswer) return;
     if (q.type === 'single') {
       onAnswer(index);
       return;
@@ -816,20 +753,28 @@ function StrictMCQ({
       <div className="space-y-3">
         {q.options.map((option, index) => {
           const selected = isSelected(index);
+          const correct = isCorrect(index);
           return (
             <button
               key={index}
-              onClick={() => choose(index)}
+              onClick={reviewMode ? undefined : () => choose(index)}
+              disabled={reviewMode}
               className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm leading-6 transition-all ${
-                selected
-                  ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
-                  : 'border-border bg-background/40 hover:border-primary/40 hover:bg-muted/30'
+                reviewMode && correct
+                  ? 'border-success bg-success/10'
+                  : selected
+                    ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
+                    : reviewMode && !selected && correct
+                      ? 'border-success/30 bg-success/5'
+                      : 'border-border bg-background/40 hover:border-primary/40 hover:bg-muted/30'
               }`}
             >
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${
                 selected
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-muted-foreground'
+                  : correct
+                    ? 'border-success bg-success text-success'
+                    : 'border-border text-muted-foreground'
               }`}>
                 {String.fromCharCode(65 + index)}
               </span>
@@ -838,6 +783,12 @@ function StrictMCQ({
           );
         })}
       </div>
+      {reviewMode && q.explanation && (
+        <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <div className="mb-1 text-[10px] font-black uppercase tracking-[0.15em] text-primary">Explanation</div>
+          <p className="text-xs leading-5 text-muted-foreground">{q.explanation}</p>
+        </div>
+      )}
     </div>
   );
 }
